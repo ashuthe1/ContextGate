@@ -24,9 +24,9 @@ The visible proof of success is a demo where a mock catalog has many tools, a pr
 - [x] (2026-06-03) Implemented execution gateway with task capability checks, argument validation, execution policy checks, mock tool routing, result redaction, and audit events.
 - [x] (2026-06-03) Implemented CLI `call` command with terminal approval flow and `serve` command for the daemon.
 - [x] (2026-06-03) Implemented end-to-end sample agent demo.
-- [ ] Add real MCP stdio transport support.
-- [ ] Add SDK package wrapper around daemon APIs.
-- [ ] Add semantic tool retrieval.
+- [x] (2026-06-03) Added real MCP stdio transport support.
+- [x] (2026-06-03) Added SDK package wrapper around daemon APIs.
+- [x] (2026-06-03) Added hybrid semantic tool retrieval.
 
 ## Surprises & Discoveries
 
@@ -88,6 +88,10 @@ The visible proof of success is a demo where a mock catalog has many tools, a pr
 Milestone 1 is complete. The repo now has a runnable CLI that can initialize config, index 30 mock MCP tools, select 8 task-relevant tools for a Jira-to-GitHub PR workflow, show blocked dangerous tools for destructive prompts, and write local audit/task state. Typecheck, unit tests, build, and compiled CLI smoke tests pass. The remaining major gap is execution: selected tools are not yet callable through a policy-enforcing gateway.
 
 Milestone 2 is complete. The repo now has a policy-enforcing execution gateway. `contextgate select` creates a persisted task and capability, `contextgate call` executes selected allowed tools, guessed tools outside the capability are blocked, missing required arguments are rejected, and `ask` tools return `approval_required` until approved. A built-in HTTP daemon exposes health, tool selection, tool call, and task explanation routes. The sample agent proves the end-to-end flow without a real LLM.
+
+The next milestone follow-up is complete for stdio MCP servers. The connector manager can now spawn configured stdio servers, initialize them over MCP framing, discover tools with `tools/list`, and execute calls with `tools/call`. Config now supports per-server `command`, `args`, `cwd`, and `env`, and the transport is covered by an end-to-end process test using a framed stdio fixture.
+
+The SDK and retrieval follow-ups are also complete. `@contextgate/sdk` now wraps the daemon health, selection, tool-call, and task-explanation APIs for SDK mode integrations. Retrieval now combines lexical matches with lightweight semantic concept expansion so prompts like "bug report", "issue tracker", and "code review" still pull the expected Jira and GitHub workflow tools without introducing embedding dependencies yet.
 
 ## Context and Orientation
 

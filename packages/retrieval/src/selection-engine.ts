@@ -10,6 +10,7 @@ import { estimateToolSchemaTokens } from "../../catalog/src/index.js";
 import { DefaultPolicyEngine } from "../../policy/src/index.js";
 import type { PolicyDocument } from "../../core/src/index.js";
 import { retrieveLexicalTools } from "./lexical-index.js";
+import { retrieveSemanticTools } from "./semantic-index.js";
 
 export interface SelectionEngine {
   selectTools(input: SelectToolsInput): Promise<SelectToolsResult>;
@@ -25,7 +26,10 @@ export class DefaultSelectionEngine implements SelectionEngine {
   async selectTools(input: SelectToolsInput): Promise<SelectToolsResult> {
     const maxTools = input.maxTools ?? this.policyDocument.selection.maxTools ?? this.config.selection.maxTools;
     const policyEngine = new DefaultPolicyEngine(this.policyDocument);
-    const candidates = retrieveLexicalTools(input.prompt, this.tools)
+    const candidates = mergeCandidates(
+      retrieveLexicalTools(input.prompt, this.tools),
+      retrieveSemanticTools(input.prompt, this.tools),
+    )
       .map((candidate) => applyRiskPenalty(candidate, policyEngine))
       .sort((a, b) => b.score - a.score || a.tool.id.localeCompare(b.tool.id));
 
@@ -113,4 +117,28 @@ function applyRiskPenalty(candidate: CandidateTool, policyEngine: DefaultPolicyE
     score,
     reasons: penalty > 0 ? [...candidate.reasons, `risk_penalty:${penalty}`] : candidate.reasons,
   };
+}
+
+function mergeCandidates(lexical: CandidateTool[], semantic: CandidateTool[]): CandidateTool[] {
+  const merged = new Map<string, CandidateTool>();
+
+  for (const candidate of lexical) {
+    merged.set(candidate.tool.id, candidate);
+  }
+
+  for (const candidate of semantic) {
+    const existing = merged.get(candidate.tool.id);
+    if (!existing) {
+      merged.set(candidate.tool.id, candidate);
+      continue;
+    }
+
+    merged.set(candidate.tool.id, {
+      tool: candidate.tool,
+      score: Math.min(1, existing.score * 0.65 + candidate.score * 0.35),
+      reasons: [...new Set([...existing.reasons, ...candidate.reasons])],
+    });
+  }
+
+  return [...merged.values()];
 }

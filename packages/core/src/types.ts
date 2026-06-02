@@ -196,6 +196,8 @@ export interface ServerConfig {
   transport: "mock" | "stdio" | "http";
   command?: string;
   args?: string[];
+  cwd?: string;
+  env?: Record<string, string>;
   url?: string;
   trust?: "trusted" | "user_configured" | "unknown";
 }

@@ -65,7 +65,10 @@ The first runnable slice is implemented:
 - `contextgate policy test "<prompt>"` dry-runs selection and shows selected, hidden, and blocked tools.
 - `contextgate call <task> <capability> <tool> <json>` executes a selected tool through the gateway.
 - `contextgate serve` starts the local HTTP daemon.
+- `@contextgate/sdk` provides a TypeScript client for `selectTools`, `callTool`, task explanation, and health checks.
 - `github.merge_pull_request` and other `ask` tools require explicit approval before execution.
+- Configured `stdio` MCP servers are supported for discovery and execution through real MCP framing.
+- Retrieval now uses a hybrid lexical plus lightweight semantic matcher, so prompts like "bug report" and "code review" map to Jira and GitHub PR workflows.
 - Risk classification, policy filtering, retrieval, catalog persistence, and audit redaction have unit tests.
 
 Run it locally:
@@ -81,6 +84,20 @@ Execute a selected tool:
     npm run cli -- select "Read Jira ticket PROJ-123, inspect the repo, and open a PR with a fix"
     npm run cli -- call <task-id> <capability-id> jira.get_issue '{"key":"PROJ-123"}'
 
+Use a real stdio MCP server:
+
+```yaml
+servers:
+  local_docs:
+    transport: stdio
+    command: npx
+    args:
+      - -y
+      - "@modelcontextprotocol/server-filesystem"
+      - /absolute/path/to/docs
+    trust: user_configured
+```
+
 Run the sample API-level agent:
 
     npm run build
@@ -90,6 +107,18 @@ Start the local daemon:
 
     npm run build
     npm run daemon -- --port=3737
+
+Use the SDK from a custom agent:
+
+```ts
+import { ContextGate } from "@contextgate/sdk";
+
+const gate = new ContextGate({ baseUrl: "http://127.0.0.1:3737" });
+const selection = await gate.selectTools({
+  prompt: "Check the bug report and open a code review with the patch",
+  projectId: "demo",
+});
+```
 
 ## References
 

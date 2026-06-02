@@ -68,6 +68,8 @@ export async function handleRequest(
       prompt: body.prompt,
       configPath: options.configPath,
       maxTools: typeof body.maxTools === "number" ? body.maxTools : undefined,
+      userId: typeof body.userId === "string" ? body.userId : undefined,
+      projectId: typeof body.projectId === "string" ? body.projectId : undefined,
     });
 
     writeJson(response, 200, selected.result);

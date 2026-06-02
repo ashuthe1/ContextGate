@@ -62,6 +62,8 @@ export function normalizeConfig(value: unknown, configPath = "contextgate.yaml")
       transport: transport as ServerConfig["transport"],
       command: optionalString(serverValue.command),
       args: arrayOfStrings(serverValue.args),
+      cwd: optionalString(serverValue.cwd),
+      env: recordOfStrings(serverValue.env),
       url: optionalString(serverValue.url),
       trust: trustOrDefault(serverValue.trust, "user_configured"),
     };
@@ -168,6 +170,15 @@ function arrayOfStrings(value: unknown): string[] | undefined {
   }
 
   return value.filter((item): item is string => typeof item === "string");
+}
+
+function recordOfStrings(value: unknown): Record<string, string> | undefined {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+
+  const entries = Object.entries(value).filter((entry): entry is [string, string] => typeof entry[1] === "string");
+  return entries.length > 0 ? Object.fromEntries(entries) : undefined;
 }
 
 function trustOrDefault(value: unknown, fallback: ServerConfig["trust"]): ServerConfig["trust"] {

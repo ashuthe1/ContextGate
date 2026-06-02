@@ -103,6 +103,8 @@ export async function selectTools(input: {
   configPath?: string;
   maxTools?: number;
   dryRun?: boolean;
+  userId?: string;
+  projectId?: string;
 }): Promise<{ result: SelectToolsResult; indexed: boolean }> {
   const { project, tools, indexed } = await loadCatalogOrIndex(input.configPath);
   const engine = new DefaultSelectionEngine(tools, project.policy, project.config);
@@ -110,6 +112,8 @@ export async function selectTools(input: {
     prompt: input.prompt,
     maxTools: input.maxTools,
     dryRun: input.dryRun,
+    userId: input.userId,
+    projectId: input.projectId,
   });
 
   await audit(project).write({

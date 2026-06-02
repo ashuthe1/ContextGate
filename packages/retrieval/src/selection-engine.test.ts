@@ -48,4 +48,23 @@ describe("selection engine", () => {
     expect(result.selected.length).toBeLessThanOrEqual(8);
     expect(result.estimatedSchemaTokensSaved).toBeGreaterThan(0);
   });
+
+  it("finds workflow tools from semantic prompt aliases", async () => {
+    const discovered = Object.entries(MOCK_TOOLS_BY_SERVER)
+      .filter(([serverId]) => serverId in config.servers)
+      .flatMap(([serverId, definitions]) => definitions.map((definition) => ({ serverId, definition })));
+    const tools = normalizeDiscoveredTools(discovered, config.servers);
+    const policy = await loadPolicyDocument(config);
+    const engine = new DefaultSelectionEngine(tools, policy, config);
+
+    const result = await engine.selectTools({
+      prompt: "Check the bug report in the issue tracker and open a code review with the patch",
+      dryRun: true,
+    });
+
+    const selectedIds = result.selected.map((item) => item.tool.id);
+    expect(selectedIds).toContain("jira.get_issue");
+    expect(selectedIds).toContain("github.create_pull_request");
+    expect(result.candidates.some((item) => item.reasons.some((reason) => reason.startsWith("concept:")))).toBe(true);
+  });
 });
