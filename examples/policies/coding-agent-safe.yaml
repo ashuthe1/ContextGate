@@ -1,0 +1,108 @@
+version: 1
+
+defaults:
+  unknownToolMode: ask
+  selectedToolLimit: 8
+  maxSchemaTokens: 8000
+  capabilityTtlMinutes: 30
+
+servers:
+  jira:
+    trust: user_configured
+    defaultMode: allow
+  github:
+    trust: user_configured
+    defaultMode: allow
+  filesystem:
+    trust: user_configured
+    defaultMode: allow
+  slack:
+    trust: user_configured
+    defaultMode: ask
+  database:
+    trust: user_configured
+    defaultMode: ask
+  shell:
+    trust: user_configured
+    defaultMode: ask
+  kubernetes:
+    trust: user_configured
+    defaultMode: ask
+  stripe:
+    trust: user_configured
+    defaultMode: ask
+
+tools:
+  github.merge_pull_request:
+    mode: ask
+    risk: write_safe
+
+  github.delete_branch:
+    mode: ask
+    risk: destructive
+
+  github.delete_repository:
+    mode: deny
+    risk: destructive
+
+  filesystem.delete_file:
+    mode: ask
+    risk: destructive
+
+  slack.send_message:
+    mode: ask
+    risk: write_external
+
+  slack.create_channel:
+    mode: ask
+    risk: write_external
+
+  database.run_read_query:
+    mode: ask
+    risk: read
+
+  database.run_write_query:
+    mode: ask
+    risk: privileged_infra
+
+  database.drop_table:
+    mode: deny
+    risk: destructive
+
+  shell.run_command:
+    mode: ask
+    risk: privileged_infra
+
+  shell.install_package:
+    mode: ask
+    risk: privileged_infra
+
+  kubernetes.restart_deployment:
+    mode: ask
+    risk: privileged_infra
+
+  kubernetes.delete_deployment:
+    mode: deny
+    risk: destructive
+
+  stripe.refund_payment:
+    mode: ask
+    risk: monetary
+
+selection:
+  maxTools: 8
+  minRelevanceScore: 0.10
+  riskPenalties:
+    read: 0
+    write_safe: 0.03
+    write_external: 0.12
+    destructive: 0.35
+    privileged_infra: 0.30
+    monetary: 0.45
+    credential_access: 0.50
+    unknown: 0.20
+
+logging:
+  storePromptText: false
+  redactSecrets: true
+  auditPath: .contextgate/audit.jsonl

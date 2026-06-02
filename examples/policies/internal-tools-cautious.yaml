@@ -1,0 +1,54 @@
+version: 1
+
+defaults:
+  unknownToolMode: ask
+  selectedToolLimit: 12
+  maxSchemaTokens: 8000
+  capabilityTtlMinutes: 30
+
+servers:
+  jira:
+    defaultMode: allow
+  github:
+    defaultMode: ask
+  filesystem:
+    defaultMode: ask
+  slack:
+    defaultMode: ask
+  database:
+    defaultMode: ask
+  shell:
+    defaultMode: ask
+  kubernetes:
+    defaultMode: ask
+  stripe:
+    defaultMode: ask
+
+tools:
+  github.delete_repository:
+    mode: deny
+    risk: destructive
+  database.drop_table:
+    mode: deny
+    risk: destructive
+  kubernetes.delete_deployment:
+    mode: deny
+    risk: destructive
+
+selection:
+  maxTools: 12
+  minRelevanceScore: 0.10
+  riskPenalties:
+    read: 0
+    write_safe: 0.08
+    write_external: 0.16
+    destructive: 0.40
+    privileged_infra: 0.40
+    monetary: 0.45
+    credential_access: 0.50
+    unknown: 0.25
+
+logging:
+  storePromptText: false
+  redactSecrets: true
+  auditPath: .contextgate/audit.jsonl

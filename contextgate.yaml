@@ -1,0 +1,42 @@
+version: 1
+
+servers:
+  jira:
+    transport: mock
+    trust: user_configured
+  github:
+    transport: mock
+    trust: user_configured
+  slack:
+    transport: mock
+    trust: user_configured
+  filesystem:
+    transport: mock
+    trust: user_configured
+  database:
+    transport: mock
+    trust: user_configured
+  shell:
+    transport: mock
+    trust: user_configured
+  kubernetes:
+    transport: mock
+    trust: user_configured
+  stripe:
+    transport: mock
+    trust: user_configured
+
+policy:
+  file: examples/policies/coding-agent-safe.yaml
+
+selection:
+  maxTools: 8
+  maxSchemaTokens: 8000
+  minRelevanceScore: 0.15
+
+audit:
+  path: .contextgate/audit.jsonl
+  storePromptText: false
+  redactSecrets: true
+
+stateDir: .contextgate

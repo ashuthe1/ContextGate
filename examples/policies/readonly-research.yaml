@@ -1,0 +1,72 @@
+version: 1
+
+defaults:
+  unknownToolMode: hide
+  selectedToolLimit: 10
+  maxSchemaTokens: 8000
+  capabilityTtlMinutes: 30
+
+servers:
+  jira:
+    defaultMode: allow
+  github:
+    defaultMode: allow
+  filesystem:
+    defaultMode: allow
+  slack:
+    defaultMode: allow
+  database:
+    defaultMode: ask
+  shell:
+    defaultMode: hide
+  kubernetes:
+    defaultMode: hide
+  stripe:
+    defaultMode: hide
+
+tools:
+  github.create_branch:
+    mode: hide
+    risk: write_safe
+  github.update_file:
+    mode: hide
+    risk: write_safe
+  github.create_pull_request:
+    mode: hide
+    risk: write_safe
+  github.merge_pull_request:
+    mode: hide
+    risk: write_safe
+  github.delete_branch:
+    mode: deny
+    risk: destructive
+  github.delete_repository:
+    mode: deny
+    risk: destructive
+  slack.send_message:
+    mode: hide
+    risk: write_external
+  database.run_write_query:
+    mode: deny
+    risk: privileged_infra
+  database.drop_table:
+    mode: deny
+    risk: destructive
+
+selection:
+  maxTools: 10
+  minRelevanceScore: 0.10
+  riskPenalties:
+    read: 0
+    write_safe: 0.50
+    write_external: 0.50
+    destructive: 0.60
+    privileged_infra: 0.60
+    monetary: 0.60
+    credential_access: 0.60
+    unknown: 0.40
+
+logging:
+  storePromptText: false
+  redactSecrets: true
+  auditPath: .contextgate/audit.jsonl

@@ -1,0 +1,30 @@
+{
+  "name": "contextgate",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Policy-aware MCP tool router that exposes only task-relevant tools to AI agents.",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "precli": "npm run build --silent",
+    "cli": "node dist/apps/cli/src/main.js",
+    "dev:cli": "tsx apps/cli/src/main.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*",
+    "examples/*"
+  ],
+  "dependencies": {
+    "commander": "^12.1.0",
+    "yaml": "^2.6.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.1",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}
