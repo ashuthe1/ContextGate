@@ -1,0 +1,155 @@
+import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import type { AddressInfo } from "node:net";
+import { parse } from "node:url";
+import { CapabilityStore, LocalExecutionGateway, loadProject, selectTools } from "../../../packages/gateway/src/index.js";
+import type { JsonObject } from "../../../packages/core/src/index.js";
+
+export interface DaemonOptions {
+  configPath?: string;
+  port?: number;
+  host?: string;
+}
+
+export function startDaemon(options: DaemonOptions = {}): Promise<{ url: string; close: () => Promise<void> }> {
+  const port = options.port ?? 3737;
+  const host = options.host ?? "127.0.0.1";
+  const server = createServer((request, response) => {
+    handleRequest(request, response, options).catch((error: unknown) => {
+      writeJson(response, 500, {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    });
+  });
+
+  return new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(port, host, () => {
+      server.off("error", reject);
+      const address = server.address() as AddressInfo;
+      const actualPort = typeof address === "object" && address !== null ? address.port : port;
+      resolve({
+        url: `http://${host}:${actualPort}`,
+        close: () =>
+          new Promise((closeResolve, closeReject) => {
+            server.close((error) => {
+              if (error) {
+                closeReject(error);
+              } else {
+                closeResolve();
+              }
+            });
+          }),
+      });
+    });
+  });
+}
+
+export async function handleRequest(
+  request: IncomingMessage,
+  response: ServerResponse,
+  options: DaemonOptions,
+): Promise<void> {
+  const method = request.method ?? "GET";
+  const pathname = parse(request.url ?? "/").pathname ?? "/";
+
+  if (method === "GET" && pathname === "/health") {
+    writeJson(response, 200, { status: "ok" });
+    return;
+  }
+
+  if (method === "POST" && pathname === "/v1/tool-selection") {
+    const body = await readJson(request);
+    if (!isRecord(body) || typeof body.prompt !== "string") {
+      writeJson(response, 400, { error: "body.prompt must be a string" });
+      return;
+    }
+
+    const selected = await selectTools({
+      prompt: body.prompt,
+      configPath: options.configPath,
+      maxTools: typeof body.maxTools === "number" ? body.maxTools : undefined,
+    });
+
+    writeJson(response, 200, selected.result);
+    return;
+  }
+
+  if (method === "POST" && pathname === "/v1/tool-call") {
+    const body = await readJson(request);
+    if (!isToolCallBody(body)) {
+      writeJson(response, 400, {
+        error: "body must include taskId, capabilityId, toolId, and arguments object",
+      });
+      return;
+    }
+
+    const gateway = new LocalExecutionGateway();
+    const result = await gateway.callTool({
+      configPath: options.configPath,
+      taskId: body.taskId,
+      capabilityId: body.capabilityId,
+      toolId: body.toolId,
+      arguments: body.arguments,
+      approval: isRecord(body.approval)
+        ? {
+            approved: body.approval.approved === true,
+            approver: typeof body.approval.approver === "string" ? body.approval.approver : undefined,
+            reason: typeof body.approval.reason === "string" ? body.approval.reason : undefined,
+          }
+        : undefined,
+    });
+
+    const status = result.decision === "blocked" ? 403 : result.decision === "approval_required" ? 202 : 200;
+    writeJson(response, status, result);
+    return;
+  }
+
+  const taskMatch = pathname.match(/^\/v1\/tasks\/([^/]+)\/explanation$/);
+  if (method === "GET" && taskMatch) {
+    const project = await loadProject(options.configPath);
+    const store = new CapabilityStore(project.stateDir);
+    const task = await store.loadTaskSelection(decodeURIComponent(taskMatch[1]));
+    writeJson(response, 200, task);
+    return;
+  }
+
+  writeJson(response, 404, { error: "not found" });
+}
+
+async function readJson(request: IncomingMessage): Promise<unknown> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of request) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  }
+
+  if (chunks.length === 0) {
+    return {};
+  }
+
+  return JSON.parse(Buffer.concat(chunks).toString("utf8")) as unknown;
+}
+
+function writeJson(response: ServerResponse, status: number, body: unknown): void {
+  response.writeHead(status, { "content-type": "application/json; charset=utf-8" });
+  response.end(`${JSON.stringify(body, null, 2)}\n`);
+}
+
+function isToolCallBody(value: unknown): value is {
+  taskId: string;
+  capabilityId: string;
+  toolId: string;
+  arguments: JsonObject;
+  approval?: JsonObject;
+} {
+  return (
+    isRecord(value) &&
+    typeof value.taskId === "string" &&
+    typeof value.capabilityId === "string" &&
+    typeof value.toolId === "string" &&
+    isRecord(value.arguments)
+  );
+}
+
+function isRecord(value: unknown): value is JsonObject {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}

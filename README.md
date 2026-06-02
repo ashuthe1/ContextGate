@@ -63,6 +63,9 @@ The first runnable slice is implemented:
 - `contextgate index` indexes 30 deterministic mock MCP tools across GitHub, Jira, Slack, filesystem, database, shell, Kubernetes, and Stripe.
 - `contextgate select "<prompt>"` returns a task-scoped tool set and writes local task/audit state.
 - `contextgate policy test "<prompt>"` dry-runs selection and shows selected, hidden, and blocked tools.
+- `contextgate call <task> <capability> <tool> <json>` executes a selected tool through the gateway.
+- `contextgate serve` starts the local HTTP daemon.
+- `github.merge_pull_request` and other `ask` tools require explicit approval before execution.
 - Risk classification, policy filtering, retrieval, catalog persistence, and audit redaction have unit tests.
 
 Run it locally:
@@ -72,6 +75,21 @@ Run it locally:
     npm run cli -- init --force
     npm run cli -- index
     npm run cli -- policy test "Read Jira ticket PROJ-123, inspect the repo, and open a PR with a fix"
+
+Execute a selected tool:
+
+    npm run cli -- select "Read Jira ticket PROJ-123, inspect the repo, and open a PR with a fix"
+    npm run cli -- call <task-id> <capability-id> jira.get_issue '{"key":"PROJ-123"}'
+
+Run the sample API-level agent:
+
+    npm run build
+    npm run sample-agent
+
+Start the local daemon:
+
+    npm run build
+    npm run daemon -- --port=3737
 
 ## References
 

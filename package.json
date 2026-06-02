@@ -8,7 +8,9 @@
     "build": "tsc -p tsconfig.json",
     "precli": "npm run build --silent",
     "cli": "node dist/apps/cli/src/main.js",
+    "daemon": "node dist/apps/daemon/src/main.js",
     "dev:cli": "tsx apps/cli/src/main.ts",
+    "sample-agent": "node dist/examples/sample-agent/src/run.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run"
   },

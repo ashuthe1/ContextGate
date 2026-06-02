@@ -20,9 +20,13 @@ The visible proof of success is a demo where a mock catalog has many tools, a pr
 - [x] (2026-06-03) Implemented lexical retrieval, workflow hints, risk classification, policy loading, exposure decisions, audit redaction, and JSONL audit logging.
 - [x] (2026-06-03) Implemented CLI commands for init, index, select, and policy test.
 - [x] (2026-06-03) Added unit tests and smoke-tested the compiled CLI.
-- [ ] Implement local daemon and execution gateway.
-- [ ] Implement terminal approval flow.
-- [ ] Implement end-to-end sample agent demo.
+- [x] (2026-06-03) Implemented local daemon request handling and HTTP server entrypoint.
+- [x] (2026-06-03) Implemented execution gateway with task capability checks, argument validation, execution policy checks, mock tool routing, result redaction, and audit events.
+- [x] (2026-06-03) Implemented CLI `call` command with terminal approval flow and `serve` command for the daemon.
+- [x] (2026-06-03) Implemented end-to-end sample agent demo.
+- [ ] Add real MCP stdio transport support.
+- [ ] Add SDK package wrapper around daemon APIs.
+- [ ] Add semantic tool retrieval.
 
 ## Surprises & Discoveries
 
@@ -37,6 +41,9 @@ The visible proof of success is a demo where a mock catalog has many tools, a pr
 
 - Observation: Parallel CLI smoke commands exposed a partial-read catalog bug.
   Evidence: running `index` and `policy test` concurrently once produced `Catalog file is invalid JSON: Unexpected end of JSON input`; catalog writes now use a temporary file followed by atomic rename.
+
+- Observation: The local sandbox does not allow opening a listening HTTP socket without escalation.
+  Evidence: a daemon health test that called `server.listen()` failed with `listen EPERM: operation not permitted 127.0.0.1`; the daemon test now exercises the request handler directly, and real daemon smoke testing needs an escalated command.
 
 ## Decision Log
 
@@ -68,9 +75,19 @@ The visible proof of success is a demo where a mock catalog has many tools, a pr
   Rationale: A 12-tool default let weakly related tools into the first demo. Eight keeps the task manifest focused while still enough for the Jira-to-GitHub PR workflow.
   Date/Author: 2026-06-03 / Codex
 
+- Decision: Make task capabilities explicit files under `.contextgate/capabilities`.
+  Rationale: A selected tool list is not enough for execution. Persisted capability records give the gateway an enforceable boundary: only tools selected for the task can be called.
+  Date/Author: 2026-06-03 / Codex
+
+- Decision: Return `approval_required` from the daemon instead of prompting inside the HTTP request.
+  Rationale: HTTP clients and future UIs need a resumable approval flow. The CLI can prompt interactively, while API clients can resubmit with an approval payload.
+  Date/Author: 2026-06-03 / Codex
+
 ## Outcomes & Retrospective
 
 Milestone 1 is complete. The repo now has a runnable CLI that can initialize config, index 30 mock MCP tools, select 8 task-relevant tools for a Jira-to-GitHub PR workflow, show blocked dangerous tools for destructive prompts, and write local audit/task state. Typecheck, unit tests, build, and compiled CLI smoke tests pass. The remaining major gap is execution: selected tools are not yet callable through a policy-enforcing gateway.
+
+Milestone 2 is complete. The repo now has a policy-enforcing execution gateway. `contextgate select` creates a persisted task and capability, `contextgate call` executes selected allowed tools, guessed tools outside the capability are blocked, missing required arguments are rejected, and `ask` tools return `approval_required` until approved. A built-in HTTP daemon exposes health, tool selection, tool call, and task explanation routes. The sample agent proves the end-to-end flow without a real LLM.
 
 ## Context and Orientation
 
@@ -174,6 +191,36 @@ Expected blocked tools:
     database.drop_table              blocked
     github.delete_repository         blocked
 
+Gateway execution smoke test:
+
+    npm run cli -- select "Read Jira ticket PROJ-123, inspect the repo, and open a PR with a fix"
+    npm run cli -- call <task-id> <capability-id> jira.get_issue '{"key":"PROJ-123"}'
+
+Expected result:
+
+    "decision": "allowed"
+    "text": "Mock result for jira.get_issue"
+
+Guessed dangerous tool smoke test:
+
+    npm run cli -- call <task-id> <capability-id> github.delete_repository '{"repo":"ash/contextgate"}' --no-prompt
+
+Expected result:
+
+    "decision": "blocked"
+    "tool is not part of this task capability"
+
+Approval smoke test:
+
+    npm run cli -- select "Merge GitHub pull request 42 in repo ash/contextgate"
+    npm run cli -- call <task-id> <capability-id> github.merge_pull_request '{"repo":"ash/contextgate","number":42}' --no-prompt
+    npm run cli -- call <task-id> <capability-id> github.merge_pull_request '{"repo":"ash/contextgate","number":42}' --yes
+
+Expected results:
+
+    "decision": "approval_required"
+    "decision": "allowed"
+
 ## Validation and Acceptance
 
 The MVP is accepted when these behaviors work:
@@ -187,7 +234,7 @@ The MVP is accepted when these behaviors work:
 7. `npm run typecheck` passes.
 8. `npm run build` passes.
 
-The remaining gateway milestone will add:
+The gateway milestone added:
 
 1. `POST /v1/tool-selection` returns a task id, capability id, selected tools, and reasons.
 2. `POST /v1/tool-call` allows a selected read tool.
@@ -201,7 +248,8 @@ Suggested tests:
 - `selection-engine.test.ts` verifies relevant GitHub/Jira tools rank above Slack/database tools for a PR task.
 - `execution-gateway.test.ts` verifies denied hidden tools cannot execute.
 - `redaction.test.ts` verifies API keys and authorization headers are redacted.
-- `mock-e2e.test.ts` will run index, select, and tool-call against the mock server in the next milestone.
+- `execution-gateway.test.ts` verifies selected tools execute, guessed tools are blocked, required arguments are validated, and ask-mode tools require approval before execution.
+- `server.test.ts` verifies daemon health handling without opening a socket, because the local sandbox blocks listen calls.
 
 ## Idempotence and Recovery
 

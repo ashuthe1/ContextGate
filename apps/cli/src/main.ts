@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 import { Command } from "commander";
+import { registerCallCommand } from "./commands/call.js";
 import { registerIndexCommand } from "./commands/index.js";
 import { registerInitCommand } from "./commands/init.js";
+import { registerServeCommand } from "./commands/serve.js";
 import { registerPolicyTestCommand, registerSelectCommand } from "./commands/select.js";
 
 const program = new Command();
@@ -16,6 +18,8 @@ registerInitCommand(program);
 registerIndexCommand(program);
 registerSelectCommand(program);
 registerPolicyTestCommand(program);
+registerCallCommand(program);
+registerServeCommand(program);
 
 program.parseAsync(process.argv).catch((error: unknown) => {
   if (error instanceof Error) {
