@@ -76,4 +76,55 @@ describe("ContextGate SDK", () => {
 
     expect(result.decision).toBe("approval_required");
   });
+
+  it("supports server health and task expansion endpoints", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify([{ serverId: "filesystem", transport: "stdio", status: "ok", discoveredTools: 3 }]), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            taskId: "task_123",
+            capabilityId: "cap_456",
+            promptText: "Read docs",
+            promptHash: "hash",
+            totalTools: 3,
+            candidates: [],
+            selected: [],
+            rejected: [],
+            hiddenCount: 0,
+            blockedCount: 0,
+            notRelevantCount: 0,
+            estimatedSchemaTokensSaved: 12,
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        ),
+      );
+
+    const client = new ContextGate({ baseUrl: "http://127.0.0.1:3737", fetch: fetchMock as typeof fetch });
+    const health = await client.serverHealth();
+    const expanded = await client.expandTools("task_123", "Need filesystem write access", 2);
+
+    expect(health[0].serverId).toBe("filesystem");
+    expect(expanded.capabilityId).toBe("cap_456");
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "http://127.0.0.1:3737/v1/tasks/task_123/expand",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          reason: "Need filesystem write access",
+          additionalTools: 2,
+        }),
+      }),
+    );
+  });
 });

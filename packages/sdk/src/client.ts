@@ -1,4 +1,4 @@
-import type { SelectToolsInput, SelectToolsResult } from "../../core/src/index.js";
+import type { SelectToolsInput, SelectToolsResult, ServerHealth } from "../../core/src/index.js";
 import type { ToolCallResult } from "../../gateway/src/index.js";
 
 export interface ContextGateOptions {
@@ -34,6 +34,10 @@ export class ContextGate {
     return this.request("/health", { method: "GET" });
   }
 
+  async serverHealth(): Promise<ServerHealth[]> {
+    return this.request("/v1/server-health", { method: "GET" });
+  }
+
   async selectTools(input: SelectToolsInput): Promise<SelectToolsResult> {
     return this.request("/v1/tool-selection", {
       method: "POST",
@@ -55,6 +59,16 @@ export class ContextGate {
 
   async explainTask(taskId: string): Promise<SelectToolsResult> {
     return this.request(`/v1/tasks/${encodeURIComponent(taskId)}/explanation`, { method: "GET" });
+  }
+
+  async expandTools(taskId: string, reason: string, additionalTools?: number): Promise<SelectToolsResult> {
+    return this.request(`/v1/tasks/${encodeURIComponent(taskId)}/expand`, {
+      method: "POST",
+      body: JSON.stringify({
+        reason,
+        additionalTools,
+      }),
+    });
   }
 
   private async request(path: string, init: RequestInit): Promise<any> {

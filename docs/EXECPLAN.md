@@ -27,6 +27,9 @@ The visible proof of success is a demo where a mock catalog has many tools, a pr
 - [x] (2026-06-03) Added real MCP stdio transport support.
 - [x] (2026-06-03) Added SDK package wrapper around daemon APIs.
 - [x] (2026-06-03) Added hybrid semantic tool retrieval.
+- [x] (2026-06-03) Added server health checks across configured MCP integrations.
+- [x] (2026-06-03) Added task selection expansion for follow-up tool needs.
+- [x] (2026-06-03) Added catalog diff reporting for re-indexed integrations.
 
 ## Surprises & Discoveries
 
@@ -44,6 +47,9 @@ The visible proof of success is a demo where a mock catalog has many tools, a pr
 
 - Observation: The local sandbox does not allow opening a listening HTTP socket without escalation.
   Evidence: a daemon health test that called `server.listen()` failed with `listen EPERM: operation not permitted 127.0.0.1`; the daemon test now exercises the request handler directly, and real daemon smoke testing needs an escalated command.
+
+- Observation: Expansion can be implemented safely without re-running the whole task selection if the system ranks only previously rejected tools against the follow-up reason.
+  Evidence: the new `expandTools` path adds `jira.add_comment` to a previously narrow Jira-only task while leaving the original selected tool intact and reissuing a fresh capability.
 
 ## Decision Log
 
@@ -83,6 +89,14 @@ The visible proof of success is a demo where a mock catalog has many tools, a pr
   Rationale: HTTP clients and future UIs need a resumable approval flow. The CLI can prompt interactively, while API clients can resubmit with an approval payload.
   Date/Author: 2026-06-03 / Codex
 
+- Decision: Implement selection expansion as a ranked pass over previously rejected tools instead of a full task reselection.
+  Rationale: Expansion should preserve the original task id and chosen tools, while letting users recover from a too-narrow manifest with minimal state churn and a fresh capability.
+  Date/Author: 2026-06-03 / Codex
+
+- Decision: Start real-integration ergonomics with health checks and catalog diffs before broader UI work.
+  Rationale: Once real stdio servers are involved, operators need immediate visibility into whether discovery works and what changed between indexing runs; these CLI and SDK surfaces are more urgent than a web UI.
+  Date/Author: 2026-06-03 / Codex
+
 ## Outcomes & Retrospective
 
 Milestone 1 is complete. The repo now has a runnable CLI that can initialize config, index 30 mock MCP tools, select 8 task-relevant tools for a Jira-to-GitHub PR workflow, show blocked dangerous tools for destructive prompts, and write local audit/task state. Typecheck, unit tests, build, and compiled CLI smoke tests pass. The remaining major gap is execution: selected tools are not yet callable through a policy-enforcing gateway.
@@ -92,6 +106,10 @@ Milestone 2 is complete. The repo now has a policy-enforcing execution gateway. 
 The next milestone follow-up is complete for stdio MCP servers. The connector manager can now spawn configured stdio servers, initialize them over MCP framing, discover tools with `tools/list`, and execute calls with `tools/call`. Config now supports per-server `command`, `args`, `cwd`, and `env`, and the transport is covered by an end-to-end process test using a framed stdio fixture.
 
 The SDK and retrieval follow-ups are also complete. `@contextgate/sdk` now wraps the daemon health, selection, tool-call, and task-explanation APIs for SDK mode integrations. Retrieval now combines lexical matches with lightweight semantic concept expansion so prompts like "bug report", "issue tracker", and "code review" still pull the expected Jira and GitHub workflow tools without introducing embedding dependencies yet.
+
+The first real SDK consumer and first real integration path are now in place. The sample agent runs through the public SDK against the daemon instead of calling gateway internals directly, and the repo includes a concrete stdio filesystem MCP example config that exercises a real external server shape through the same indexing and selection flow.
+
+The next Phase 3 slice is complete. The CLI and SDK can now check integration health, the daemon exposes server-health and task-expansion APIs, task selections can be expanded when an agent needs additional tools mid-run, and re-indexing reports catalog additions, changes, and removals so real integration drift is visible. Typecheck, build, and the expanded 18-test suite all pass.
 
 ## Context and Orientation
 

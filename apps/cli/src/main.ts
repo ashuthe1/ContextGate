@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 import { Command } from "commander";
 import { registerCallCommand } from "./commands/call.js";
+import { registerExpandCommand } from "./commands/expand.js";
+import { registerHealthCommand } from "./commands/health.js";
 import { registerIndexCommand } from "./commands/index.js";
 import { registerInitCommand } from "./commands/init.js";
 import { registerServeCommand } from "./commands/serve.js";
@@ -16,8 +18,10 @@ program
 
 registerInitCommand(program);
 registerIndexCommand(program);
+registerHealthCommand(program);
 registerSelectCommand(program);
 registerPolicyTestCommand(program);
+registerExpandCommand(program);
 registerCallCommand(program);
 registerServeCommand(program);
 

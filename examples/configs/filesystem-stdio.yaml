@@ -1,0 +1,27 @@
+version: 1
+
+servers:
+  filesystem:
+    transport: stdio
+    command: npx
+    args:
+      - -y
+      - "@modelcontextprotocol/server-filesystem"
+      - .
+    cwd: .
+    trust: user_configured
+
+policy:
+  file: examples/policies/coding-agent-safe.yaml
+
+selection:
+  maxTools: 6
+  maxSchemaTokens: 8000
+  minRelevanceScore: 0.15
+
+audit:
+  path: .contextgate/audit.jsonl
+  storePromptText: false
+  redactSecrets: true
+
+stateDir: .contextgate

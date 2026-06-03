@@ -1,7 +1,14 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 import { parse } from "node:url";
-import { CapabilityStore, LocalExecutionGateway, loadProject, selectTools } from "../../../packages/gateway/src/index.js";
+import {
+  CapabilityStore,
+  LocalExecutionGateway,
+  checkServerHealth,
+  expandTools,
+  loadProject,
+  selectTools,
+} from "../../../packages/gateway/src/index.js";
 import type { JsonObject } from "../../../packages/core/src/index.js";
 
 export interface DaemonOptions {
@@ -54,6 +61,11 @@ export async function handleRequest(
 
   if (method === "GET" && pathname === "/health") {
     writeJson(response, 200, { status: "ok" });
+    return;
+  }
+
+  if (method === "GET" && pathname === "/v1/server-health") {
+    writeJson(response, 200, await checkServerHealth(options.configPath));
     return;
   }
 
@@ -112,6 +124,24 @@ export async function handleRequest(
     const store = new CapabilityStore(project.stateDir);
     const task = await store.loadTaskSelection(decodeURIComponent(taskMatch[1]));
     writeJson(response, 200, task);
+    return;
+  }
+
+  const expandMatch = pathname.match(/^\/v1\/tasks\/([^/]+)\/expand$/);
+  if (method === "POST" && expandMatch) {
+    const body = await readJson(request);
+    if (!isRecord(body) || typeof body.reason !== "string") {
+      writeJson(response, 400, { error: "body.reason must be a string" });
+      return;
+    }
+
+    const result = await expandTools({
+      taskId: decodeURIComponent(expandMatch[1]),
+      reason: body.reason,
+      configPath: options.configPath,
+      additionalTools: typeof body.additionalTools === "number" ? body.additionalTools : undefined,
+    });
+    writeJson(response, 200, result);
     return;
   }
 

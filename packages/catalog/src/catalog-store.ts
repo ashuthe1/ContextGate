@@ -1,6 +1,6 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { Tool } from "../../core/src/index.js";
+import type { CatalogDiff, Tool } from "../../core/src/index.js";
 import { CatalogError } from "../../core/src/index.js";
 
 export interface CatalogSnapshot {
@@ -52,6 +52,43 @@ export class CatalogStore {
     await rename(tempPath, catalogPath);
     return snapshot;
   }
+}
+
+export function diffCatalogTools(previous: Tool[] = [], next: Tool[] = []): CatalogDiff {
+  const previousById = new Map(previous.map((tool) => [tool.id, tool]));
+  const nextById = new Map(next.map((tool) => [tool.id, tool]));
+  const added: string[] = [];
+  const removed: string[] = [];
+  const changed: string[] = [];
+  let unchanged = 0;
+
+  for (const [toolId, tool] of nextById) {
+    const existing = previousById.get(toolId);
+    if (!existing) {
+      added.push(toolId);
+      continue;
+    }
+
+    if (existing.hash !== tool.hash || existing.unavailable !== tool.unavailable) {
+      changed.push(toolId);
+      continue;
+    }
+
+    unchanged += 1;
+  }
+
+  for (const toolId of previousById.keys()) {
+    if (!nextById.has(toolId)) {
+      removed.push(toolId);
+    }
+  }
+
+  return {
+    added: added.sort(),
+    removed: removed.sort(),
+    changed: changed.sort(),
+    unchanged,
+  };
 }
 
 function isNotFound(error: unknown): boolean {

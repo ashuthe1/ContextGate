@@ -6,6 +6,7 @@ import { StdioMcpClient } from "./stdio-client.js";
 export interface McpConnectorManager {
   discoverTools(): Promise<DiscoveredTool[]>;
   callTool(serverId: string, toolName: string, args: unknown): Promise<unknown>;
+  discoverServerTools(serverId: string): Promise<DiscoveredTool[]>;
 }
 
 export class LocalMcpConnectorManager implements McpConnectorManager {
@@ -14,34 +15,37 @@ export class LocalMcpConnectorManager implements McpConnectorManager {
   async discoverTools(): Promise<DiscoveredTool[]> {
     const discovered: DiscoveredTool[] = [];
 
-    for (const [serverId, server] of Object.entries(this.config.servers)) {
-      if (server.transport === "mock") {
-        const tools = MOCK_TOOLS_BY_SERVER[serverId] ?? [];
-        for (const definition of tools) {
-          discovered.push({ serverId, definition });
-        }
-        continue;
-      }
-
-      if (server.transport === "stdio") {
-        const client = new StdioMcpClient(serverId, server);
-        try {
-          await client.connect();
-          for (const definition of await client.listTools()) {
-            discovered.push({ serverId, definition });
-          }
-        } finally {
-          await client.close();
-        }
-        continue;
-      }
-
-      throw new ConfigError(
-        `Server ${serverId} uses transport ${server.transport}; only mock and stdio transports are implemented.`,
-      );
+    for (const serverId of Object.keys(this.config.servers)) {
+      discovered.push(...(await this.discoverServerTools(serverId)));
     }
 
     return discovered;
+  }
+
+  async discoverServerTools(serverId: string): Promise<DiscoveredTool[]> {
+    const server = this.config.servers[serverId];
+    if (!server) {
+      throw new ConfigError(`Server ${serverId} is not configured.`);
+    }
+
+    if (server.transport === "mock") {
+      const tools = MOCK_TOOLS_BY_SERVER[serverId] ?? [];
+      return tools.map((definition) => ({ serverId, definition }));
+    }
+
+    if (server.transport === "stdio") {
+      const client = new StdioMcpClient(serverId, server);
+      try {
+        await client.connect();
+        return (await client.listTools()).map((definition) => ({ serverId, definition }));
+      } finally {
+        await client.close();
+      }
+    }
+
+    throw new ConfigError(
+      `Server ${serverId} uses transport ${server.transport}; only mock and stdio transports are implemented.`,
+    );
   }
 
   async callTool(serverId: string, toolName: string, args: unknown): Promise<unknown> {

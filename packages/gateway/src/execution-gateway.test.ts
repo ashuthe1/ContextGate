@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { describe, expect, it } from "vitest";
 import { LocalExecutionGateway } from "./execution-gateway.js";
-import { selectTools } from "./project.js";
+import { checkServerHealth, expandTools, selectTools } from "./project.js";
 
 describe("execution gateway", () => {
   it("allows selected tools and blocks guessed tools outside the task capability", async () => {
@@ -101,6 +101,35 @@ describe("execution gateway", () => {
     });
 
     expect(allowed.decision).toBe("allowed");
+  });
+
+  it("expands a task selection with additional relevant tools", async () => {
+    const configPath = await writeTestProject();
+    const { result } = await selectTools({
+      configPath,
+      prompt: "Read Jira ticket PROJ-123",
+      maxTools: 1,
+    });
+
+    const expanded = await expandTools({
+      configPath,
+      taskId: result.taskId,
+      reason: "Need to comment back on the issue",
+      additionalTools: 2,
+    });
+
+    expect(expanded.selected.length).toBeGreaterThan(result.selected.length);
+    expect(expanded.selected.map((item) => item.tool.id)).toContain("jira.add_comment");
+  });
+
+  it("reports server health for configured integrations", async () => {
+    const configPath = await writeTestProject();
+    const results = await checkServerHealth(configPath);
+
+    expect(results).toEqual([
+      { serverId: "github", transport: "mock", status: "ok", discoveredTools: 9 },
+      { serverId: "jira", transport: "mock", status: "ok", discoveredTools: 4 },
+    ]);
   });
 });
 

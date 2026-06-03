@@ -90,6 +90,7 @@ export interface SelectToolsInput {
 export interface SelectToolsResult {
   taskId: string;
   capabilityId?: string;
+  promptText?: string;
   promptHash: string;
   totalTools: number;
   candidates: CandidateTool[];
@@ -99,6 +100,21 @@ export interface SelectToolsResult {
   blockedCount: number;
   notRelevantCount: number;
   estimatedSchemaTokensSaved: number;
+}
+
+export interface CatalogDiff {
+  added: string[];
+  removed: string[];
+  changed: string[];
+  unchanged: number;
+}
+
+export interface ServerHealth {
+  serverId: string;
+  transport: "mock" | "stdio" | "http";
+  status: "ok" | "error";
+  discoveredTools?: number;
+  error?: string;
 }
 
 export interface Task {

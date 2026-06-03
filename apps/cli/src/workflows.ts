@@ -1,10 +1,14 @@
 import { access, mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import {
+  type CatalogDiff,
   defaultConfigText,
+  type ServerHealth,
   type SelectToolsResult,
 } from "../../../packages/core/src/index.js";
 export {
+  checkServerHealth,
+  expandTools,
   indexTools,
   loadProject,
   selectTools,
@@ -66,6 +70,29 @@ export function formatSelectionResult(result: SelectToolsResult, options: { inde
     }
   }
 
+  return lines.join("\n");
+}
+
+export function formatCatalogIndexResult(tools: number, diff: CatalogDiff): string {
+  const lines = [`Indexed ${tools} tools.`];
+  lines.push(`Added: ${diff.added.length}`);
+  lines.push(`Changed: ${diff.changed.length}`);
+  lines.push(`Removed: ${diff.removed.length}`);
+  lines.push(`Unchanged: ${diff.unchanged}`);
+  return lines.join("\n");
+}
+
+export function formatHealthResult(results: ServerHealth[]): string {
+  const lines = [`Servers checked: ${results.length}`];
+  for (const result of results) {
+    if (result.status === "ok") {
+      lines.push(
+        `  ${pad(result.serverId, 16)} ${pad(result.transport, 6)} ok    tools=${result.discoveredTools ?? 0}`,
+      );
+    } else {
+      lines.push(`  ${pad(result.serverId, 16)} ${pad(result.transport, 6)} error ${result.error ?? "unknown error"}`);
+    }
+  }
   return lines.join("\n");
 }
 

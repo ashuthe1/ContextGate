@@ -65,10 +65,13 @@ The first runnable slice is implemented:
 - `contextgate policy test "<prompt>"` dry-runs selection and shows selected, hidden, and blocked tools.
 - `contextgate call <task> <capability> <tool> <json>` executes a selected tool through the gateway.
 - `contextgate serve` starts the local HTTP daemon.
+- `contextgate health` checks configured MCP servers and reports whether discovery succeeds.
+- `contextgate expand <task-id> "<reason>"` adds more tools to an existing task when the first manifest was too narrow.
 - `@contextgate/sdk` provides a TypeScript client for `selectTools`, `callTool`, task explanation, and health checks.
 - `github.merge_pull_request` and other `ask` tools require explicit approval before execution.
 - Configured `stdio` MCP servers are supported for discovery and execution through real MCP framing.
 - Retrieval now uses a hybrid lexical plus lightweight semantic matcher, so prompts like "bug report" and "code review" map to Jira and GitHub PR workflows.
+- Re-indexing now reports added, changed, removed, and unchanged tools so real integration drift is visible.
 - Risk classification, policy filtering, retrieval, catalog persistence, and audit redaction have unit tests.
 
 Run it locally:
@@ -77,12 +80,14 @@ Run it locally:
     npm test
     npm run cli -- init --force
     npm run cli -- index
+    npm run cli -- health
     npm run cli -- policy test "Read Jira ticket PROJ-123, inspect the repo, and open a PR with a fix"
 
 Execute a selected tool:
 
     npm run cli -- select "Read Jira ticket PROJ-123, inspect the repo, and open a PR with a fix"
     npm run cli -- call <task-id> <capability-id> jira.get_issue '{"key":"PROJ-123"}'
+    npm run cli -- expand <task-id> "Need to add a comment back on the issue"
 
 Use a real stdio MCP server:
 
@@ -118,7 +123,22 @@ const selection = await gate.selectTools({
   prompt: "Check the bug report and open a code review with the patch",
   projectId: "demo",
 });
+const servers = await gate.serverHealth();
+const expanded = await gate.expandTools(selection.taskId, "Need filesystem write access", 2);
 ```
+
+The sample agent now uses the SDK end to end. It starts a local daemon unless `CONTEXTGATE_BASE_URL` is already set, then runs selection, an allowed tool call, a blocked guessed call, and a task explanation fetch.
+
+Try a real stdio MCP integration with the filesystem server:
+
+    npm run cli -- index --config examples/configs/filesystem-stdio.yaml
+    npm run cli -- policy test "Read the local README and inspect the docs folder" --config examples/configs/filesystem-stdio.yaml
+
+The example config in `examples/configs/filesystem-stdio.yaml` uses:
+
+    npx -y @modelcontextprotocol/server-filesystem .
+
+That keeps the first real integration local and low-risk while exercising the same stdio MCP path used for other servers.
 
 ## References
 
