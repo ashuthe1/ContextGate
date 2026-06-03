@@ -134,6 +134,13 @@ export interface ApprovalSummary {
   approvalId?: string;
   timestamp: string;
   reasons: string[];
+  arguments?: JsonObject;
+}
+
+export interface PolicyEditorDocument {
+  path?: string;
+  editable: boolean;
+  text: string;
 }
 
 export interface Task {

@@ -83,6 +83,47 @@ describe("daemon", () => {
     expect(timelineResponse.status).toBe(200);
     expect(JSON.parse(timelineResponse.body)).toHaveLength(2);
   });
+
+  it("loads and saves the configured policy file", async () => {
+    const configPath = await writeUiStateProject();
+
+    const getRequest = Readable.from([]) as IncomingMessage;
+    getRequest.method = "GET";
+    getRequest.url = "/v1/policy";
+    const getResponse = new MockResponse();
+    await handleRequest(getRequest, getResponse as unknown as ServerResponse, { configPath });
+    expect(getResponse.status).toBe(200);
+    expect(JSON.parse(getResponse.body).editable).toBe(true);
+
+    const updatedPolicy = ["version: 1", "defaults:", "  unknownToolMode: deny", ""].join("\n");
+    const putRequest = Readable.from([JSON.stringify({ text: updatedPolicy })]) as IncomingMessage;
+    putRequest.method = "PUT";
+    putRequest.url = "/v1/policy";
+    const putResponse = new MockResponse();
+    await handleRequest(putRequest, putResponse as unknown as ServerResponse, { configPath });
+    expect(putResponse.status).toBe(200);
+    expect(JSON.parse(putResponse.body).text).toContain("unknownToolMode: deny");
+  });
+
+  it("approves and denies pending approvals through daemon routes", async () => {
+    const approveConfigPath = await writeUiStateProject();
+    const approveRequest = Readable.from([JSON.stringify({ approver: "tester", reason: "looks safe" })]) as IncomingMessage;
+    approveRequest.method = "POST";
+    approveRequest.url = "/v1/approvals/approval_1/approve";
+    const approveResponse = new MockResponse();
+    await handleRequest(approveRequest, approveResponse as unknown as ServerResponse, { configPath: approveConfigPath });
+    expect(approveResponse.status).toBe(200);
+    expect(JSON.parse(approveResponse.body).decision).toBe("allowed");
+
+    const denyConfigPath = await writeUiStateProject();
+    const denyRequest = Readable.from([JSON.stringify({ approver: "tester", reason: "not safe" })]) as IncomingMessage;
+    denyRequest.method = "POST";
+    denyRequest.url = "/v1/approvals/approval_1/deny";
+    const denyResponse = new MockResponse();
+    await handleRequest(denyRequest, denyResponse as unknown as ServerResponse, { configPath: denyConfigPath });
+    expect(denyResponse.status).toBe(200);
+    expect(JSON.parse(denyResponse.body).denied).toBe(true);
+  });
 });
 
 class MockResponse {
@@ -136,6 +177,8 @@ async function writeUiStateProject(): Promise<string> {
   const configPath = join(root, "contextgate.yaml");
   const stateDir = join(root, ".contextgate");
   await mkdir(join(stateDir, "tasks"), { recursive: true });
+  await mkdir(join(stateDir, "capabilities"), { recursive: true });
+  const policyPath = join(root, "policy.yaml");
 
   await writeFile(
     configPath,
@@ -145,6 +188,11 @@ async function writeUiStateProject(): Promise<string> {
       "  jira:",
       "    transport: mock",
       "    trust: user_configured",
+      "  github:",
+      "    transport: mock",
+      "    trust: user_configured",
+      "policy:",
+      "  file: policy.yaml",
       "selection:",
       "  maxTools: 8",
       "  maxSchemaTokens: 8000",
@@ -154,6 +202,35 @@ async function writeUiStateProject(): Promise<string> {
       "  storePromptText: false",
       "  redactSecrets: true",
       "stateDir: .contextgate",
+      "",
+    ].join("\n"),
+  );
+
+  await writeFile(
+    policyPath,
+    [
+      "version: 1",
+      "defaults:",
+      "  unknownToolMode: ask",
+      "  selectedToolLimit: 8",
+      "  maxSchemaTokens: 8000",
+      "  capabilityTtlMinutes: 30",
+      "servers:",
+      "  jira:",
+      "    defaultMode: allow",
+      "  github:",
+      "    defaultMode: allow",
+      "tools:",
+      "  github.merge_pull_request:",
+      "    mode: ask",
+      "    risk: write_safe",
+      "selection:",
+      "  maxTools: 8",
+      "  minRelevanceScore: 0.10",
+      "logging:",
+      "  storePromptText: false",
+      "  redactSecrets: true",
+      "  auditPath: .contextgate/audit.jsonl",
       "",
     ].join("\n"),
   );
@@ -193,23 +270,23 @@ async function writeUiStateProject(): Promise<string> {
       selected: [
         {
           tool: {
-            id: "jira.get_issue",
-            serverId: "jira",
-            name: "get_issue",
-            description: "Fetch issue",
+            id: "github.merge_pull_request",
+            serverId: "github",
+            name: "merge_pull_request",
+            description: "Merge PR",
             inputSchema: { type: "object" },
             trustLevel: "user_configured",
-            riskClass: "read",
+            riskClass: "write_safe",
             hash: "hash",
             firstSeenAt: "2026-06-03T00:00:00.000Z",
             lastSeenAt: "2026-06-03T00:00:00.000Z",
             unavailable: false,
           },
           score: 0.9,
-          mode: "allow",
-          riskClass: "read",
-          requiresApproval: false,
-          reasons: ["token:jira"],
+          mode: "ask",
+          riskClass: "write_safe",
+          requiresApproval: true,
+          reasons: ["workflow_hint"],
         },
       ],
       rejected: [],
@@ -230,7 +307,7 @@ async function writeUiStateProject(): Promise<string> {
         toolId: "github.merge_pull_request",
         decision: "approval_required",
         reasons: ["approval required by policy"],
-        data: { approvalId: "approval_1" },
+        data: { approvalId: "approval_1", arguments: { repo: "ash/contextgate", number: 42 } },
       }),
       JSON.stringify({
         timestamp: "2026-06-03T00:01:00.000Z",
@@ -241,6 +318,18 @@ async function writeUiStateProject(): Promise<string> {
       }),
       "",
     ].join("\n"),
+  );
+
+  await writeFile(
+    join(stateDir, "capabilities", "cap_123.json"),
+    `${JSON.stringify({
+      id: "cap_123",
+      taskId: "task_123",
+      toolIds: ["github.merge_pull_request"],
+      expiresAt: "2099-06-03T00:00:00.000Z",
+      callLimits: { maxCallsTotal: 10, maxCallsPerTool: 10 },
+      resourceConstraints: {},
+    })}\n`,
   );
 
   return configPath;

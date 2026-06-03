@@ -1,7 +1,7 @@
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { CatalogStore } from "../../../packages/catalog/src/index.js";
-import type { ApprovalSummary, AuditEvent, SelectToolsResult, TaskSummary } from "../../../packages/core/src/index.js";
+import type { ApprovalSummary, AuditEvent, JsonObject, SelectToolsResult, TaskSummary } from "../../../packages/core/src/index.js";
 
 export async function listTaskSummaries(stateDir: string): Promise<TaskSummary[]> {
   const tasksDir = join(stateDir, "tasks");
@@ -65,11 +65,20 @@ export async function listPendingApprovals(auditPath: string): Promise<ApprovalS
             : undefined,
         timestamp: event.timestamp,
         reasons: event.reasons ?? [],
+        arguments:
+          event.data && typeof event.data === "object" && "arguments" in event.data && isRecord(event.data.arguments)
+            ? (event.data.arguments as JsonObject)
+            : undefined,
       });
       continue;
     }
 
-    if (event.type === "approval_granted" || event.type === "tool_call_finished" || event.type === "tool_blocked") {
+    if (
+      event.type === "approval_granted" ||
+      event.type === "approval_denied" ||
+      event.type === "tool_call_finished" ||
+      event.type === "tool_blocked"
+    ) {
       pending.delete(key);
     }
   }
@@ -97,4 +106,8 @@ function findCreatedAt(selection: SelectToolsResult): string | undefined {
     .filter((value): value is string => typeof value === "string")
     .sort()[0];
   return firstSeen;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

@@ -31,10 +31,21 @@ export function renderUiHtml(): string {
         <section class="panel">
           <div class="panel-header">
             <h2>Pending Approvals</h2>
-            <span class="meta">Derived from audit log</span>
+            <span class="meta">Approve or deny ask-mode requests</span>
           </div>
           <div id="approvals"></div>
         </section>
+      </section>
+      <section class="panel">
+        <div class="panel-header">
+          <h2>Policy Editor</h2>
+          <span id="policyMeta" class="meta"></span>
+        </div>
+        <div class="editor-actions">
+          <button id="savePolicyButton">Save Policy</button>
+          <span id="policyStatus" class="meta"></span>
+        </div>
+        <textarea id="policyEditor" class="editor" spellcheck="false"></textarea>
       </section>
       <section class="layout">
         <section class="panel">
@@ -99,6 +110,8 @@ button { border: 0; border-radius: 999px; background: var(--accent); color: whit
 .card { padding: 18px; border-radius: 20px; }
 .card .value { font: 700 2rem/1 ui-sans-serif, system-ui, sans-serif; margin-top: 8px; }
 .panel { border-radius: 22px; padding: 18px; min-height: 220px; }
+.editor-actions { display: flex; gap: 12px; align-items: center; margin-bottom: 12px; }
+.editor { width: 100%; min-height: 280px; border-radius: 18px; border: 1px solid var(--border); background: #fffdf9; padding: 14px; color: var(--text); font: 13px/1.5 ui-monospace, monospace; resize: vertical; }
 .panel.detail { min-height: 420px; }
 .panel-header { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; margin-bottom: 14px; }
 .table { display: grid; gap: 10px; }
@@ -111,6 +124,8 @@ button { border: 0; border-radius: 999px; background: var(--accent); color: whit
 .pill.error { color: var(--error); background: #fdeceb; }
 .pill.warn { color: var(--warn); background: #fff2d7; }
 .kv { display: flex; gap: 10px; flex-wrap: wrap; color: var(--muted); font: 500 13px/1.4 ui-sans-serif, system-ui, sans-serif; }
+.actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+.actions button.secondary { background: #e7ddd0; color: var(--text); }
 .detail-body { display: grid; gap: 16px; }
 .detail-grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); }
 .list { display: grid; gap: 10px; }
@@ -125,20 +140,23 @@ button { border: 0; border-radius: 999px; background: var(--accent); color: whit
 }
 
 export function renderUiScript(): string {
-  return `const state = { tasks: [], selectedTaskId: null };
+  return `const state = { tasks: [], selectedTaskId: null, policyEditable: false };
 
 document.getElementById("refreshButton").addEventListener("click", () => loadDashboard(true));
+document.getElementById("savePolicyButton").addEventListener("click", () => savePolicy());
 loadDashboard(false).catch(renderFatal);
 
 async function loadDashboard(preserveSelection) {
-  const [health, approvals, tasks, catalog] = await Promise.all([
+  const [health, approvals, tasks, catalog, policy] = await Promise.all([
     requestJson("/v1/server-health"),
     requestJson("/v1/approvals"),
     requestJson("/v1/tasks"),
     requestJson("/v1/catalog"),
+    requestJson("/v1/policy"),
   ]);
 
   state.tasks = tasks;
+  state.policyEditable = policy.editable === true;
   if (!preserveSelection || !state.selectedTaskId) {
     state.selectedTaskId = tasks[0]?.taskId ?? null;
   }
@@ -146,6 +164,7 @@ async function loadDashboard(preserveSelection) {
   renderSummary(health, approvals, tasks, catalog);
   renderHealth(health);
   renderApprovals(approvals);
+  renderPolicy(policy);
   renderTasks(tasks);
   renderCatalog(catalog);
 
@@ -192,9 +211,24 @@ function renderHealth(health) {
 
 function renderApprovals(approvals) {
   document.getElementById("approvals").innerHTML = wrapRows(
-    approvals.map((item) => '<div class="row"><div><strong>' + escapeHtml(item.toolId) + '</strong></div><div class="kv"><span class="mono">' + escapeHtml(item.taskId) + '</span><span>' + escapeHtml(item.timestamp) + '</span></div><div class="muted">' + escapeHtml(item.reasons.join(', ') || 'approval required') + '</div></div>'),
+    approvals.map((item) => '<div class="row"><div><strong>' + escapeHtml(item.toolId) + '</strong></div><div class="kv"><span class="mono">' + escapeHtml(item.taskId) + '</span><span>' + escapeHtml(item.timestamp) + '</span></div><div class="muted">' + escapeHtml(item.reasons.join(', ') || 'approval required') + '</div><div class="actions"><button data-approve="' + escapeHtml(item.approvalId || '') + '">Approve</button><button class="secondary" data-deny="' + escapeHtml(item.approvalId || '') + '">Deny</button></div></div>'),
     'No pending approvals.'
   );
+  for (const element of document.querySelectorAll('[data-approve]')) {
+    element.addEventListener('click', () => resolveApproval(element.getAttribute('data-approve'), true));
+  }
+  for (const element of document.querySelectorAll('[data-deny]')) {
+    element.addEventListener('click', () => resolveApproval(element.getAttribute('data-deny'), false));
+  }
+}
+
+function renderPolicy(policy) {
+  const editor = document.getElementById('policyEditor');
+  editor.value = policy.text || '';
+  editor.disabled = policy.editable !== true;
+  document.getElementById('savePolicyButton').disabled = policy.editable !== true;
+  document.getElementById('policyMeta').textContent = policy.path ? policy.path : 'Generated default policy view';
+  document.getElementById('policyStatus').textContent = policy.editable ? 'Editable' : 'Read-only until policy.file is configured';
 }
 
 function renderTasks(tasks) {
@@ -235,13 +269,58 @@ function wrapRows(rows, emptyText) {
   return rows.length > 0 ? '<div class="table">' + rows.join('') + '</div>' : '<div class="empty">' + escapeHtml(emptyText) + '</div>';
 }
 
-async function requestJson(url) {
-  const response = await fetch(url);
-  if (!response.ok) {
-    const payload = await response.text();
-    throw new Error(payload || ('Request failed for ' + url));
+async function savePolicy() {
+  const editor = document.getElementById('policyEditor');
+  const status = document.getElementById('policyStatus');
+  if (!state.policyEditable) {
+    status.textContent = 'Policy is read-only.';
+    return;
   }
-  return response.json();
+
+  status.textContent = 'Saving...';
+  try {
+    const policy = await requestJson('/v1/policy', {
+      method: 'PUT',
+      body: JSON.stringify({ text: editor.value }),
+    });
+    renderPolicy(policy);
+    status.textContent = 'Saved.';
+  } catch (error) {
+    status.textContent = error.message || String(error);
+  }
+}
+
+async function resolveApproval(approvalId, approve) {
+  if (!approvalId) {
+    return;
+  }
+  try {
+    await requestJson('/v1/approvals/' + encodeURIComponent(approvalId) + '/' + (approve ? 'approve' : 'deny'), {
+      method: 'POST',
+      body: JSON.stringify({
+        approver: 'ui-user',
+        reason: approve ? 'approved in UI' : 'denied in UI',
+      }),
+    });
+    await loadDashboard(true);
+  } catch (error) {
+    renderFatal(error);
+  }
+}
+
+async function requestJson(url, init) {
+  const response = await fetch(url, {
+    headers: {
+      'content-type': 'application/json',
+    },
+    ...init,
+  });
+  const text = await response.text();
+  const data = text ? JSON.parse(text) : undefined;
+  if (!response.ok) {
+    throw new Error(data?.error || ('Request failed for ' + url));
+  }
+  return data;
 }
 
 function renderFatal(error) {

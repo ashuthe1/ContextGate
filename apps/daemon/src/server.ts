@@ -10,6 +10,8 @@ import {
   selectTools,
 } from "../../../packages/gateway/src/index.js";
 import type { JsonObject } from "../../../packages/core/src/index.js";
+import { approveRequest, denyRequest } from "./approval-actions.js";
+import { loadPolicyEditor, savePolicyEditor } from "./policy-view.js";
 import { listPendingApprovals, listTaskSummaries, listTaskTimeline, loadCatalogSnapshot } from "./state-view.js";
 import { renderUiHtml, renderUiScript, renderUiStyles } from "./ui.js";
 
@@ -92,6 +94,22 @@ export async function handleRequest(
     return;
   }
 
+  if (method === "GET" && pathname === "/v1/policy") {
+    writeJson(response, 200, await loadPolicyEditor(options.configPath));
+    return;
+  }
+
+  if (method === "PUT" && pathname === "/v1/policy") {
+    const body = await readJson(request);
+    if (!isRecord(body) || typeof body.text !== "string") {
+      writeJson(response, 400, { error: "body.text must be a string" });
+      return;
+    }
+
+    writeJson(response, 200, await savePolicyEditor(options.configPath, body.text));
+    return;
+  }
+
   if (method === "GET" && pathname === "/v1/catalog") {
     const project = await loadProject(options.configPath);
     writeJson(response, 200, await loadCatalogSnapshot(project.stateDir));
@@ -107,6 +125,38 @@ export async function handleRequest(
   if (method === "GET" && pathname === "/v1/approvals") {
     const project = await loadProject(options.configPath);
     writeJson(response, 200, await listPendingApprovals(project.auditPath));
+    return;
+  }
+
+  const approvalApproveMatch = pathname.match(/^\/v1\/approvals\/([^/]+)\/approve$/);
+  if (method === "POST" && approvalApproveMatch) {
+    const body = await readJson(request);
+    writeJson(
+      response,
+      200,
+      await approveRequest({
+        approvalId: decodeURIComponent(approvalApproveMatch[1]),
+        configPath: options.configPath,
+        approver: isRecord(body) && typeof body.approver === "string" ? body.approver : undefined,
+        reason: isRecord(body) && typeof body.reason === "string" ? body.reason : undefined,
+      }),
+    );
+    return;
+  }
+
+  const approvalDenyMatch = pathname.match(/^\/v1\/approvals\/([^/]+)\/deny$/);
+  if (method === "POST" && approvalDenyMatch) {
+    const body = await readJson(request);
+    writeJson(
+      response,
+      200,
+      await denyRequest({
+        approvalId: decodeURIComponent(approvalDenyMatch[1]),
+        configPath: options.configPath,
+        approver: isRecord(body) && typeof body.approver === "string" ? body.approver : undefined,
+        reason: isRecord(body) && typeof body.reason === "string" ? body.reason : undefined,
+      }),
+    );
     return;
   }
 
