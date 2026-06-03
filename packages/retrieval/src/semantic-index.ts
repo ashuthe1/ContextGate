@@ -1,6 +1,7 @@
 import type { CandidateTool, Tool } from "../../core/src/index.js";
 import { summarizeToolForSearch } from "../../catalog/src/index.js";
 import { tokenize } from "./tokenize.js";
+import { scoreWorkflowProfiles } from "./workflow-router.js";
 
 interface SemanticConcept {
   id: string;
@@ -39,12 +40,12 @@ export function retrieveSemanticTools(prompt: string, tools: Tool[]): CandidateT
   const promptConcepts = detectConcepts(prompt);
 
   return tools
-    .map((tool) => scoreTool(tool, promptConcepts))
+    .map((tool) => scoreTool(prompt, tool, promptConcepts))
     .filter((candidate) => candidate.score > 0)
     .sort((a, b) => b.score - a.score || a.tool.id.localeCompare(b.tool.id));
 }
 
-function scoreTool(tool: Tool, promptConcepts: Set<string>): CandidateTool {
+function scoreTool(prompt: string, tool: Tool, promptConcepts: Set<string>): CandidateTool {
   const toolConcepts = new Set([
     ...detectConcepts(summarizeToolForSearch(tool)),
     ...(SERVER_CONCEPTS[tool.serverId] ?? []),
@@ -83,6 +84,18 @@ function scoreTool(tool: Tool, promptConcepts: Set<string>): CandidateTool {
   if (promptConcepts.has("file_write") && /create|update|write|edit|patch/i.test(tool.name)) {
     score += 0.08;
     reasons.push("semantic_action:file_write");
+  }
+
+  const workflowProfile = scoreWorkflowProfiles(prompt, tool);
+  if (workflowProfile.bonus > 0) {
+    score += workflowProfile.bonus * 0.7;
+    reasons.push(...workflowProfile.reasons);
+  }
+
+  const trustPenalty = Math.max(0, 0.3 - (tool.trustScore ?? 1)) * 0.7;
+  if (trustPenalty > 0) {
+    score -= trustPenalty;
+    reasons.push(`trust_penalty:${trustPenalty.toFixed(2)}`);
   }
 
   return {

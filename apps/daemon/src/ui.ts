@@ -299,7 +299,7 @@ function renderCatalog(catalog) {
 
   document.getElementById("catalogCount").textContent = filtered.length + ' / ' + tools.length + ' tools';
   document.getElementById("catalog").innerHTML = wrapRows(
-    filtered.map((tool) => '<div class="row"><div><strong>' + escapeHtml(tool.id) + '</strong></div><div class="kv"><span>' + escapeHtml(tool.riskClass) + '</span><span>' + escapeHtml(tool.trustLevel) + '</span><span>' + escapeHtml(tool.serverId) + '</span></div><div class="muted">' + escapeHtml(tool.description || tool.title || 'No description') + '</div></div>'),
+    filtered.map((tool) => '<div class="row"><div><strong>' + escapeHtml(tool.id) + '</strong></div><div class="kv"><span>' + escapeHtml(tool.riskClass) + '</span><span>' + escapeHtml(tool.trustLevel) + '</span><span>' + escapeHtml(tool.serverId) + '</span><span>trust=' + escapeHtml(String(tool.trustScore ?? "n/a")) + '</span></div><div class="muted">' + escapeHtml(tool.description || tool.title || 'No description') + '</div><div class="muted">' + escapeHtml((tool.trustWarnings || []).join(', ') || 'no trust warnings') + '</div></div>'),
     tools.length === 0 ? 'Catalog has not been indexed yet.' : 'No catalog tools match the current filters.'
   );
 }
@@ -308,7 +308,7 @@ function taskDetailHtml(task, timeline) {
   const selected = task.selected.map((item) => toolExplanationHtml(item.tool.id, item.score, item.mode, item.riskClass, item.reasons, item.policyRuleId)).join('');
   const rejected = task.rejected.slice(0, 16).map((item) => toolExplanationHtml(item.tool.id, item.score, item.decision, item.tool.riskClass, item.reasons, item.policyRuleId)).join('');
   const candidateTop = (task.candidates || []).slice(0, 10).map((item) => '<div class="list-item"><strong>' + escapeHtml(item.tool.id) + '</strong><div class="kv"><span>score=' + escapeHtml(item.score?.toFixed ? item.score.toFixed(2) : String(item.score ?? '')) + '</span></div><div class="muted">' + escapeHtml((item.reasons || []).join(', ')) + '</div></div>').join('');
-  const events = timeline.map((event) => '<div class="list-item"><strong>' + escapeHtml(event.type) + '</strong><div class="kv"><span>' + escapeHtml(event.timestamp) + '</span><span>' + escapeHtml(event.toolId || '') + '</span><span>' + escapeHtml(event.decision || '') + '</span></div><div class="muted">' + escapeHtml((event.reasons || []).join(', ')) + '</div></div>').join('');
+  const events = timeline.map((event) => '<div class="list-item"><strong>' + escapeHtml(event.type) + '</strong><div class="kv"><span>' + escapeHtml(event.timestamp) + '</span><span>' + escapeHtml(event.toolId || '') + '</span><span>' + escapeHtml(event.decision || '') + '</span><span>' + escapeHtml(formatAuditData(event.data)) + '</span></div><div class="muted">' + escapeHtml((event.reasons || []).join(', ')) + '</div></div>').join('');
   return '<div class="detail-grid">' +
     '<section><h3>Prompt</h3><div class="list-item">' + escapeHtml(task.promptText || task.promptHash) + '</div></section>' +
     '<section><h3>Summary</h3><div class="list-item">catalog=' + task.totalTools + ', candidates=' + task.candidates.length + ', selected=' + task.selected.length + ', hidden=' + task.hiddenCount + ', blocked=' + task.blockedCount + ', not_relevant=' + task.notRelevantCount + ', tokens_saved=' + task.estimatedSchemaTokensSaved + '</div></section>' +
@@ -392,6 +392,16 @@ function formatArguments(value) {
   }
   const entries = Object.entries(value).slice(0, 2).map(([key, nested]) => key + '=' + String(nested));
   return entries.length > 0 ? 'args: ' + entries.join(', ') : 'args: empty';
+}
+
+function formatAuditData(value) {
+  if (!value || typeof value !== 'object') {
+    return 'data: none';
+  }
+  const outputWarnings = Array.isArray(value.outputWarnings) ? value.outputWarnings.join('|') : '';
+  const trustScore = typeof value.outputTrustScore === 'number' ? 'trust=' + value.outputTrustScore : '';
+  const compact = [trustScore, outputWarnings ? 'warnings=' + outputWarnings : ''].filter(Boolean).join(' ');
+  return compact || 'data: present';
 }
 
 function renderFatal(error) {

@@ -28,6 +28,8 @@ export interface ToolCallResult {
   approvalId?: string;
   reasons: string[];
   result?: unknown;
+  outputWarnings?: string[];
+  outputTrustScore?: number;
   errors?: string[];
 }
 
@@ -164,7 +166,7 @@ export class LocalExecutionGateway implements ExecutionGateway {
     const startedAt = Date.now();
     const connectorManager = createConnectorManager(project.config);
     const rawResult = await connectorManager.callTool(tool.serverId, tool.name, validation.arguments);
-    const result = sanitizeToolResult(rawResult, { redactSecrets: project.config.audit.redactSecrets });
+    const sanitized = sanitizeToolResult(rawResult, { redactSecrets: project.config.audit.redactSecrets });
 
     await auditLog.write({
       timestamp: new Date().toISOString(),
@@ -172,9 +174,11 @@ export class LocalExecutionGateway implements ExecutionGateway {
       taskId: input.taskId,
       toolId: input.toolId,
       decision: "allowed",
-      reasons: executionDecision.reasons,
+      reasons: [...executionDecision.reasons, ...sanitized.outputWarnings],
       data: {
         latencyMs: Date.now() - startedAt,
+        outputTrustScore: sanitized.outputTrustScore,
+        outputWarnings: sanitized.outputWarnings,
       },
     });
 
@@ -183,8 +187,10 @@ export class LocalExecutionGateway implements ExecutionGateway {
       taskId: input.taskId,
       capabilityId: input.capabilityId,
       toolId: input.toolId,
-      reasons: executionDecision.reasons,
-      result,
+      reasons: [...executionDecision.reasons, ...sanitized.outputWarnings],
+      result: sanitized.result,
+      outputWarnings: sanitized.outputWarnings,
+      outputTrustScore: sanitized.outputTrustScore,
     };
   }
 

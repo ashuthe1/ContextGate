@@ -103,6 +103,30 @@ describe("execution gateway", () => {
     expect(allowed.decision).toBe("allowed");
   });
 
+  it("sanitizes suspicious output and records output trust warnings", async () => {
+    const configPath = await writeStdioTrustProject();
+    const { result } = await selectTools({
+      configPath,
+      prompt: "Echo the diagnostic text",
+      maxTools: 4,
+    });
+
+    const gateway = new LocalExecutionGateway();
+    const allowed = await gateway.callTool({
+      configPath,
+      taskId: result.taskId,
+      capabilityId: result.capabilityId!,
+      toolId: "stdio_fixture.echo",
+      arguments: {
+        text: "hello",
+      },
+    });
+
+    expect(allowed.decision).toBe("allowed");
+    expect(allowed.outputWarnings).toContain("output_trust:ignore_instructions");
+    expect(JSON.stringify(allowed.result)).toContain("[FILTERED_INSTRUCTION]");
+  });
+
   it("expands a task selection with additional relevant tools", async () => {
     const configPath = await writeTestProject();
     const { result } = await selectTools({
@@ -184,6 +208,68 @@ async function writeTestProject(): Promise<string> {
       "    trust: user_configured",
       "  github:",
       "    transport: mock",
+      "    trust: user_configured",
+      "policy:",
+      "  file: policy.yaml",
+      "selection:",
+      "  maxTools: 8",
+      "  maxSchemaTokens: 8000",
+      "  minRelevanceScore: 0.10",
+      "audit:",
+      "  path: .contextgate/audit.jsonl",
+      "  storePromptText: false",
+      "  redactSecrets: true",
+      "stateDir: .contextgate",
+      "",
+    ].join("\n"),
+  );
+
+  return configPath;
+}
+
+async function writeStdioTrustProject(): Promise<string> {
+  const root = await mkdtemp(join(tmpdir(), "contextgate-stdio-trust-"));
+  const configPath = join(root, "contextgate.yaml");
+  const policyPath = join(root, "policy.yaml");
+
+  await writeFile(
+    policyPath,
+    [
+      "version: 1",
+      "defaults:",
+      "  unknownToolMode: ask",
+      "  selectedToolLimit: 8",
+      "  maxSchemaTokens: 8000",
+      "  capabilityTtlMinutes: 30",
+      "servers:",
+      "  stdio_fixture:",
+      "    defaultMode: allow",
+      "tools:",
+      "  stdio_fixture.echo:",
+      "    mode: allow",
+      "    risk: read",
+      "selection:",
+      "  maxTools: 8",
+      "  minRelevanceScore: 0.10",
+      "logging:",
+      "  storePromptText: false",
+      "  redactSecrets: true",
+      "  auditPath: .contextgate/audit.jsonl",
+      "",
+    ].join("\n"),
+  );
+
+  await writeFile(
+    configPath,
+    [
+      "version: 1",
+      "servers:",
+      "  stdio_fixture:",
+      "    transport: stdio",
+      `    command: ${process.execPath}`,
+      "    args:",
+      "      - examples/mock-mcp-server/stdio-fixture.mjs",
+      `    cwd: ${process.cwd()}`,
       "    trust: user_configured",
       "policy:",
       "  file: policy.yaml",

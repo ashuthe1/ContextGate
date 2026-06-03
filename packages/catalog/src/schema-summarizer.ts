@@ -30,6 +30,7 @@ export function summarizeToolForSearch(tool: Tool): string {
     tool.description ?? "",
     props,
     tool.riskClass,
+    ...(tool.trustWarnings ?? []),
   ]
     .filter(Boolean)
     .join(" ");

@@ -55,6 +55,8 @@ export interface Tool {
   firstSeenAt: string;
   lastSeenAt: string;
   unavailable?: boolean;
+  trustScore?: number;
+  trustWarnings?: string[];
 }
 
 export interface CandidateTool {

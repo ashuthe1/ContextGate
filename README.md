@@ -75,7 +75,9 @@ The first runnable slice is implemented:
 - Policy bundles support optional HMAC signing via `--signing-key-env`, and policy checks support `--report <path>` so CI can upload JSON artifacts for audit review.
 - `github.merge_pull_request` and other `ask` tools require explicit approval before execution.
 - Configured `stdio` MCP servers are supported for discovery and execution through real MCP framing.
-- Retrieval now uses a hybrid lexical plus lightweight semantic matcher, so prompts like "bug report" and "code review" map to Jira and GitHub PR workflows.
+- Retrieval now uses hybrid lexical and semantic scoring plus workflow-aware routing, so prompts like "bug report", "code review", and "incident timeline" map to the right tool families.
+- Tool descriptions now receive basic trust scoring; suspicious prompt-injection style descriptions are down-ranked during retrieval.
+- Tool execution results now receive output trust scanning; suspicious instruction-like content is filtered, secret-like values are redacted, and trust warnings are recorded in audit output.
 - Re-indexing now reports added, changed, removed, and unchanged tools so real integration drift is visible.
 - Risk classification, policy filtering, retrieval, catalog persistence, and audit redaction have unit tests.
 
@@ -199,6 +201,8 @@ The task detail view now shows:
     timeline events for the task
 
 The task, approval, and catalog panes all support local filtering so the console remains usable once the project has many saved tasks and indexed tools.
+
+Catalog rows now also show trust score and trust warnings, and task timelines surface output trust warnings from executed tools so suspicious downstream content is visible during review.
 
 Try a real stdio MCP integration with the filesystem server:
 

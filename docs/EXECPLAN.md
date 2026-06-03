@@ -37,6 +37,8 @@ The visible proof of success is a demo where a mock catalog has many tools, a pr
 - [x] (2026-06-03) Added CI-friendly policy test thresholds and JSON output.
 - [x] (2026-06-03) Added checked-in policy regression suites and team scaffold generation.
 - [x] (2026-06-03) Added optional bundle signing and policy report artifacts for CI review.
+- [x] (2026-06-03) Added workflow-aware routing and basic tool trust scoring.
+- [x] (2026-06-03) Added execution-time output trust scanning and audit/UI surfacing.
 
 ## Surprises & Discoveries
 
@@ -75,6 +77,12 @@ The visible proof of success is a demo where a mock catalog has many tools, a pr
 
 - Observation: HMAC signing is enough to add practical provenance to policy bundles when teams already manage CI secrets.
   Evidence: signed bundles now carry `signature.keyId` and `signature.digest`, verification can fail without the right env-provided key, and the scaffolded workflow emits JSON reports that CI can upload as artifacts.
+
+- Observation: Tool-description trust heuristics can improve ranking quality before any heavier trust or injection pipeline exists.
+  Evidence: suspicious descriptions such as “ignore previous instructions” are now assigned trust warnings and retrieval penalties, while incident-style prompts boost the expected Jira, Slack, and Kubernetes tool families in tests.
+
+- Observation: Execution-time trust scanning can be layered onto result sanitization without changing MCP transport or tool-call contracts.
+  Evidence: the gateway now filters instruction-like tool output, redacts secret-like values, records output trust warnings in audit events, and surfaces them in the built-in UI while existing stdio/tool-call tests still pass.
 
 ## Decision Log
 
@@ -146,6 +154,14 @@ The visible proof of success is a demo where a mock catalog has many tools, a pr
   Rationale: HMAC works with existing CI secret management, is simple to validate locally, and is enough to prove that a bundle came from a party holding the shared key while the product remains local-first.
   Date/Author: 2026-06-03 / Codex
 
+- Decision: Add workflow-aware routing as explicit prompt profiles instead of jumping straight to embeddings-heavy personalization.
+  Rationale: Prompt-shape heuristics such as PR workflows, incident response, readonly research, and workspace editing provide observable retrieval gains immediately and are easy to test and explain.
+  Date/Author: 2026-06-03 / Codex
+
+- Decision: Apply trust heuristics to tool outputs inside the result sanitizer before returning content upstream.
+  Rationale: downstream MCP output is another prompt-injection surface, and sanitizing or flagging suspicious instruction-like text at the gateway preserves the local-first architecture while reducing risk without requiring model-side defenses.
+  Date/Author: 2026-06-03 / Codex
+
 ## Outcomes & Retrospective
 
 Milestone 1 is complete. The repo now has a runnable CLI that can initialize config, index 30 mock MCP tools, select 8 task-relevant tools for a Jira-to-GitHub PR workflow, show blocked dangerous tools for destructive prompts, and write local audit/task state. Typecheck, unit tests, build, and compiled CLI smoke tests pass. The remaining major gap is execution: selected tools are not yet callable through a policy-enforcing gateway.
@@ -171,6 +187,10 @@ The first Phase 5 slice is complete. Teams can now export, verify, and import sh
 The next Phase 5 slice is complete. Repositories can now scaffold a team policy layout with `init --team-scaffold`, commit a JSON regression suite under `policies/checks/`, and run that suite with `policy test-file` both locally and in CI. The scaffold includes a GitHub Actions template that runs indexing and the checked-in suite automatically. Typecheck, build, and the 26-test suite pass.
 
 The next Phase 5 provenance slice is complete. Policy bundles now support optional HMAC signatures, `bundle-verify` can validate signatures using env-provided keys, and both `policy test` and `policy test-file` can write JSON report artifacts for CI upload and audit review. Typecheck, build, and the 28-test suite pass.
+
+The first Phase 6 slice is complete. Retrieval now adds workflow-aware routing bonuses for prompts like PR flows and incident response, and tool normalization records basic trust scores and prompt-injection warnings that retrieval can use as penalties. Typecheck, build, and the 30-test suite pass.
+
+The next Phase 6 slice is also complete. The execution gateway now scans tool results for instruction-like prompt-injection patterns, redacts secret-like values, records output trust warnings and scores in audit events, and surfaces those warnings in the built-in UI timeline and catalog views. Typecheck, build, and the 32-test suite pass.
 
 ## Context and Orientation
 

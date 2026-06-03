@@ -1,6 +1,7 @@
 import type { CandidateTool, Tool } from "../../core/src/index.js";
 import { schemaPropertyNames, summarizeToolForSearch } from "../../catalog/src/index.js";
 import { tokenize } from "./tokenize.js";
+import { scoreWorkflowProfiles } from "./workflow-router.js";
 
 const DOMAIN_HINTS: Record<string, string[]> = {
   github: ["github", "repo", "repository", "branch", "pull", "pr", "file", "commit", "merge"],
@@ -17,12 +18,12 @@ export function retrieveLexicalTools(prompt: string, tools: Tool[]): CandidateTo
   const promptTokens = new Set(tokenize(prompt));
 
   return tools
-    .map((tool) => scoreTool(tool, promptTokens))
+    .map((tool) => scoreTool(prompt, tool, promptTokens))
     .filter((candidate) => candidate.score > 0)
     .sort((a, b) => b.score - a.score || a.tool.id.localeCompare(b.tool.id));
 }
 
-function scoreTool(tool: Tool, promptTokens: Set<string>): CandidateTool {
+function scoreTool(prompt: string, tool: Tool, promptTokens: Set<string>): CandidateTool {
   const searchText = summarizeToolForSearch(tool);
   const toolTokens = new Set(tokenize(searchText));
   const reasons: string[] = [];
@@ -48,6 +49,12 @@ function scoreTool(tool: Tool, promptTokens: Set<string>): CandidateTool {
     reasons.push("workflow_hint");
   }
 
+  const workflowProfile = scoreWorkflowProfiles(prompt, tool);
+  if (workflowProfile.bonus > 0) {
+    score += workflowProfile.bonus;
+    reasons.push(...workflowProfile.reasons);
+  }
+
   for (const propName of schemaPropertyNames(tool.inputSchema)) {
     if (promptTokens.has(propName.toLowerCase())) {
       score += 0.06;
@@ -59,6 +66,12 @@ function scoreTool(tool: Tool, promptTokens: Set<string>): CandidateTool {
   if (promptIncludesPhrase(promptTokens, normalizedName)) {
     score += 0.2;
     reasons.push(`name:${tool.name}`);
+  }
+
+  const trustPenalty = Math.max(0, 0.3 - (tool.trustScore ?? 1)) * 0.7;
+  if (trustPenalty > 0) {
+    score -= trustPenalty;
+    reasons.push(`trust_penalty:${trustPenalty.toFixed(2)}`);
   }
 
   return {
