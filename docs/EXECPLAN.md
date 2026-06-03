@@ -33,6 +33,9 @@ The visible proof of success is a demo where a mock catalog has many tools, a pr
 - [x] (2026-06-03) Added a daemon-served local web UI for operators.
 - [x] (2026-06-03) Added UI-backed policy editing and approval action workflows.
 - [x] (2026-06-03) Added console filtering and richer task explanation views.
+- [x] (2026-06-03) Added shared policy bundle export, import, and verification workflows.
+- [x] (2026-06-03) Added CI-friendly policy test thresholds and JSON output.
+- [x] (2026-06-03) Added checked-in policy regression suites and team scaffold generation.
 
 ## Surprises & Discoveries
 
@@ -62,6 +65,12 @@ The visible proof of success is a demo where a mock catalog has many tools, a pr
 
 - Observation: The existing task selection JSON already contains enough data to explain selection quality once policy rule ids are preserved in selected and rejected items.
   Evidence: the task detail view now shows candidate scores, selected/rejected reasons, and the originating policy rule id without adding a new explanation store.
+
+- Observation: A portable team policy workflow does not require a remote registry if the bundle embeds the full YAML and an integrity hash.
+  Evidence: the new bundle flow exports a single JSON file with policy text plus SHA256 digest, verifies integrity locally, and installs into another project with tests covering the round trip.
+
+- Observation: Teams need a checked-in suite file more than a single command-line prompt to make policy checks stable in CI.
+  Evidence: the new `policy test-file` flow runs JSON-defined cases from `policies/checks/default.json`, and `init --team-scaffold` creates both that suite file and a GitHub Actions workflow template in one step.
 
 ## Decision Log
 
@@ -121,6 +130,14 @@ The visible proof of success is a demo where a mock catalog has many tools, a pr
   Rationale: The current data sizes are small enough that local filtering keeps the daemon API simple while making the console much more usable as saved tasks and indexed tools grow.
   Date/Author: 2026-06-03 / Codex
 
+- Decision: Use JSON policy bundles with embedded YAML text and SHA256 integrity checks for the first team-sharing format.
+  Rationale: JSON is easy to inspect and transport, preserves the exact policy text, and supports deterministic verification without introducing signing infrastructure or a package registry yet.
+  Date/Author: 2026-06-03 / Codex
+
+- Decision: Scaffold a repo-local `policies/` directory and GitHub workflow template from `init --team-scaffold`.
+  Rationale: Teams need an obvious, repeatable place to store shared bundles and regression suites, and phase-5 value is much higher when the first CI workflow is created automatically instead of described only in docs.
+  Date/Author: 2026-06-03 / Codex
+
 ## Outcomes & Retrospective
 
 Milestone 1 is complete. The repo now has a runnable CLI that can initialize config, index 30 mock MCP tools, select 8 task-relevant tools for a Jira-to-GitHub PR workflow, show blocked dangerous tools for destructive prompts, and write local audit/task state. Typecheck, unit tests, build, and compiled CLI smoke tests pass. The remaining major gap is execution: selected tools are not yet callable through a policy-enforcing gateway.
@@ -140,6 +157,10 @@ The first Phase 4 slice is complete. The daemon now serves a local operator cons
 The next Phase 4 slice is also complete. The local console can now edit the configured policy YAML file and approve or deny pending ask-mode tool calls directly from the browser. The daemon exposes policy load/save routes plus approval resolution routes, and the test suite now covers these operator actions. Typecheck, build, and the 22-test suite pass.
 
 The next Phase 4 polish slice is complete. The console now supports filtering for tasks, approvals, and catalog tools, and task detail pages provide clearer selection explanations with policy rule ids, candidate rankings, selected/rejected reasons, and timeline context. Typecheck, build, and the 22-test suite still pass.
+
+The first Phase 5 slice is complete. Teams can now export, verify, and import shared policy bundles, and CI systems can run `policy test` with JSON output plus failure thresholds for blocked, hidden, or empty selections. Typecheck, build, and the 24-test suite pass.
+
+The next Phase 5 slice is complete. Repositories can now scaffold a team policy layout with `init --team-scaffold`, commit a JSON regression suite under `policies/checks/`, and run that suite with `policy test-file` both locally and in CI. The scaffold includes a GitHub Actions template that runs indexing and the checked-in suite automatically. Typecheck, build, and the 26-test suite pass.
 
 ## Context and Orientation
 

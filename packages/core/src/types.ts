@@ -145,6 +145,31 @@ export interface PolicyEditorDocument {
   text: string;
 }
 
+export interface PolicyBundle {
+  formatVersion: 1;
+  bundleName: string;
+  exportedAt: string;
+  policyFileName: string;
+  sourcePolicyPath?: string;
+  policyText: string;
+  policySha256: string;
+  metadata?: JsonObject;
+}
+
+export interface PolicyCheckCase {
+  name: string;
+  prompt: string;
+  maxTools?: number;
+  failOnBlocked?: boolean;
+  failOnHidden?: boolean;
+  failOnEmpty?: boolean;
+}
+
+export interface PolicyCheckSuite {
+  version: 1;
+  cases: PolicyCheckCase[];
+}
+
 export interface Task {
   id: string;
   userId?: string;

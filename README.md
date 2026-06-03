@@ -69,6 +69,9 @@ The first runnable slice is implemented:
 - `contextgate health` checks configured MCP servers and reports whether discovery succeeds.
 - `contextgate expand <task-id> "<reason>"` adds more tools to an existing task when the first manifest was too narrow.
 - `@contextgate/sdk` provides a TypeScript client for `selectTools`, `callTool`, task explanation, and health checks.
+- `contextgate policy bundle-export`, `bundle-import`, and `bundle-verify` support portable shared policy bundles for teams.
+- `contextgate policy test --json --fail-on-blocked --fail-on-hidden --fail-on-empty` supports CI-friendly policy regression checks.
+- `contextgate policy test-file <suite.json>` runs a checked-in regression suite, and `contextgate init --team-scaffold` creates a starter team policy layout plus CI workflow template.
 - `github.merge_pull_request` and other `ask` tools require explicit approval before execution.
 - Configured `stdio` MCP servers are supported for discovery and execution through real MCP framing.
 - Retrieval now uses a hybrid lexical plus lightweight semantic matcher, so prompts like "bug report" and "code review" map to Jira and GitHub PR workflows.
@@ -83,6 +86,34 @@ Run it locally:
     npm run cli -- index
     npm run cli -- health
     npm run cli -- policy test "Read Jira ticket PROJ-123, inspect the repo, and open a PR with a fix"
+
+Export and verify a shared policy bundle:
+
+    npm run cli -- policy bundle-export --config contextgate.yaml --name team-safe --output .contextgate/team-safe.bundle.json
+    npm run cli -- policy bundle-verify .contextgate/team-safe.bundle.json
+
+Install a shared policy bundle into another project:
+
+    npm run cli -- policy bundle-import .contextgate/team-safe.bundle.json --output ./shared/team-safe.yaml
+
+Use policy test in CI:
+
+    npm run cli -- policy test "Delete the old repository" --json --fail-on-blocked
+
+Create a repo-ready team scaffold:
+
+    npm run cli -- init --team-scaffold
+
+This creates:
+
+    policies/checks/default.json
+    policies/README.md
+    policies/bundles/.gitkeep
+    .github/workflows/contextgate-policy-check.yml
+
+Run the checked-in suite locally or in CI:
+
+    npm run cli -- policy test-file policies/checks/default.json --config contextgate.yaml --json
 
 Execute a selected tool:
 

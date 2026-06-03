@@ -5,8 +5,9 @@ import { registerExpandCommand } from "./commands/expand.js";
 import { registerHealthCommand } from "./commands/health.js";
 import { registerIndexCommand } from "./commands/index.js";
 import { registerInitCommand } from "./commands/init.js";
+import { registerPolicyCommands } from "./commands/policy.js";
 import { registerServeCommand } from "./commands/serve.js";
-import { registerPolicyTestCommand, registerSelectCommand } from "./commands/select.js";
+import { registerSelectCommand } from "./commands/select.js";
 
 const program = new Command();
 
@@ -20,7 +21,7 @@ registerInitCommand(program);
 registerIndexCommand(program);
 registerHealthCommand(program);
 registerSelectCommand(program);
-registerPolicyTestCommand(program);
+registerPolicyCommands(program);
 registerExpandCommand(program);
 registerCallCommand(program);
 registerServeCommand(program);
