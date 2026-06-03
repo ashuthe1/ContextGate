@@ -1,12 +1,15 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { basename, dirname, resolve } from "node:path";
 import YAML from "yaml";
-import { ConfigError, hashText, loadConfig, type PolicyBundle } from "../../core/src/index.js";
+import { ConfigError, hashText, hmacText, loadConfig, type PolicyBundle } from "../../core/src/index.js";
 
 export async function exportPolicyBundle(input: {
   configPath?: string;
   bundleName: string;
   outputPath: string;
+  metadata?: Record<string, string>;
+  signingKey?: string;
+  signingKeyId?: string;
 }): Promise<PolicyBundle> {
   const { path: resolvedConfigPath, config } = await loadConfig(input.configPath);
   if (!config.policy.file) {
@@ -27,8 +30,17 @@ export async function exportPolicyBundle(input: {
     policySha256: hashText(policyText),
     metadata: {
       configPath: resolvedConfigPath,
+      ...(input.metadata ?? {}),
     },
   };
+
+  if (input.signingKey) {
+    bundle.signature = {
+      algorithm: "hmac-sha256",
+      keyId: input.signingKeyId ?? "default",
+      digest: hmacText(bundleSigningPayload(bundle), input.signingKey),
+    };
+  }
 
   await mkdir(dirname(resolve(input.outputPath)), { recursive: true });
   await writeFile(resolve(input.outputPath), `${JSON.stringify(bundle, null, 2)}\n`);
@@ -76,6 +88,46 @@ export function verifyPolicyBundle(bundle: PolicyBundle): { valid: boolean; expe
     expected: bundle.policySha256,
     actual,
   };
+}
+
+export function verifyPolicyBundleSignature(
+  bundle: PolicyBundle,
+  signingKey?: string,
+): { present: boolean; valid: boolean; expected?: string; actual?: string; keyId?: string } {
+  if (!bundle.signature) {
+    return { present: false, valid: true };
+  }
+
+  if (!signingKey) {
+    return {
+      present: true,
+      valid: false,
+      expected: bundle.signature.digest,
+      actual: undefined,
+      keyId: bundle.signature.keyId,
+    };
+  }
+
+  const actual = hmacText(bundleSigningPayload(bundle), signingKey);
+  return {
+    present: true,
+    valid: actual === bundle.signature.digest,
+    expected: bundle.signature.digest,
+    actual,
+    keyId: bundle.signature.keyId,
+  };
+}
+
+function bundleSigningPayload(bundle: PolicyBundle): string {
+  return JSON.stringify({
+    formatVersion: bundle.formatVersion,
+    bundleName: bundle.bundleName,
+    exportedAt: bundle.exportedAt,
+    policyFileName: bundle.policyFileName,
+    sourcePolicyPath: bundle.sourcePolicyPath,
+    policySha256: bundle.policySha256,
+    metadata: bundle.metadata ?? {},
+  });
 }
 
 function validatePolicyYaml(text: string): void {

@@ -7,7 +7,9 @@ import {
   installPolicyBundle,
   runPolicyCheckSuite,
   selectTools,
+  verifyBundleFileWithKey,
   verifyBundleFile,
+  writePolicyReport,
 } from "../workflows.js";
 
 export function registerPolicyCommands(program: Command): void {
@@ -20,6 +22,7 @@ export function registerPolicyCommands(program: Command): void {
     .option("-c, --config <path>", "Path to contextgate.yaml.", "contextgate.yaml")
     .option("--max-tools <count>", "Override max selected tools.")
     .option("--json", "Print the full selection result as JSON.")
+    .option("--report <path>", "Write the selection result to a JSON report file.")
     .option("--fail-on-blocked", "Exit non-zero if any tools are blocked by policy.")
     .option("--fail-on-hidden", "Exit non-zero if any tools are hidden by policy.")
     .option("--fail-on-empty", "Exit non-zero if no tools are selected.")
@@ -30,6 +33,7 @@ export function registerPolicyCommands(program: Command): void {
           config: string;
           maxTools?: string;
           json?: boolean;
+          report?: string;
           failOnBlocked?: boolean;
           failOnHidden?: boolean;
           failOnEmpty?: boolean;
@@ -44,6 +48,9 @@ export function registerPolicyCommands(program: Command): void {
         });
 
         process.stdout.write(options.json ? formatPolicyTestJson(result) : `${formatSelectionResult(result, { indexed })}\n`);
+        if (options.report) {
+          await writePolicyReport(options.report, result);
+        }
         assertPolicyTestThresholds(result, options);
       },
     );
@@ -53,15 +60,33 @@ export function registerPolicyCommands(program: Command): void {
     .description("Export the configured policy file as a portable shared bundle.")
     .requiredOption("--name <bundleName>", "Bundle name.")
     .requiredOption("--output <path>", "Where to write the bundle JSON.")
+    .option("--signing-key-env <envName>", "Read an HMAC signing key from this environment variable.")
+    .option("--signing-key-id <keyId>", "Logical key id stored in the bundle signature metadata.")
+    .option("--owner <owner>", "Bundle owner/team metadata.")
     .option("-c, --config <path>", "Path to contextgate.yaml.", "contextgate.yaml")
-    .action(async (options: { name: string; output: string; config: string }) => {
+    .action(
+      async (options: {
+        name: string;
+        output: string;
+        config: string;
+        signingKeyEnv?: string;
+        signingKeyId?: string;
+        owner?: string;
+      }) => {
+        const signingKey = options.signingKeyEnv ? process.env[options.signingKeyEnv] : undefined;
       const bundle = await createPolicyBundle({
         configPath: options.config,
         bundleName: options.name,
         outputPath: options.output,
+        metadata: options.owner ? { owner: options.owner } : undefined,
+        signingKey,
+        signingKeyId: options.signingKeyId,
       });
       console.log(`exported bundle ${bundle.bundleName}`);
       console.log(`sha256 ${bundle.policySha256}`);
+      if (bundle.signature) {
+        console.log(`signature ${bundle.signature.algorithm} key=${bundle.signature.keyId}`);
+      }
     });
 
   policy
@@ -84,13 +109,21 @@ export function registerPolicyCommands(program: Command): void {
     .command("bundle-verify")
     .description("Verify the embedded SHA256 digest for a policy bundle.")
     .argument("<bundlePath>", "Path to a policy bundle JSON file.")
-    .action(async (bundlePath: string) => {
-      const result = await verifyBundleFile(bundlePath);
+    .option("--signing-key-env <envName>", "Read an HMAC signing key from this environment variable for signature verification.")
+    .action(async (bundlePath: string, options: { signingKeyEnv?: string }) => {
+      const signingKey = options.signingKeyEnv ? process.env[options.signingKeyEnv] : undefined;
+      const result = signingKey ? await verifyBundleFileWithKey(bundlePath, signingKey) : await verifyBundleFile(bundlePath);
       console.log(`bundle ${result.bundle.bundleName}`);
       console.log(`expected ${result.expected}`);
       console.log(`actual   ${result.actual}`);
       if (!result.valid) {
         throw new Error("Policy bundle verification failed.");
+      }
+      if (result.signature.present) {
+        console.log(`signature key=${result.signature.keyId ?? "unknown"}`);
+        if (!result.signature.valid) {
+          throw new Error("Policy bundle signature verification failed.");
+        }
       }
       console.log("verification ok");
     });
@@ -101,7 +134,8 @@ export function registerPolicyCommands(program: Command): void {
     .argument("<suitePath>", "Path to a JSON policy check suite.")
     .option("-c, --config <path>", "Path to contextgate.yaml.", "contextgate.yaml")
     .option("--json", "Print the full suite result as JSON.")
-    .action(async (suitePath: string, options: { config: string; json?: boolean }) => {
+    .option("--report <path>", "Write the suite result to a JSON report file.")
+    .action(async (suitePath: string, options: { config: string; json?: boolean; report?: string }) => {
       const summary = await runPolicyCheckSuite({
         suitePath,
         configPath: options.config,
@@ -117,6 +151,9 @@ export function registerPolicyCommands(program: Command): void {
           console.log(`${item.passed ? "pass" : "fail"} ${item.name}${item.error ? ` - ${item.error}` : ""}`);
         }
       }
+      if (options.report) {
+        await writePolicyReport(options.report, summary);
+      }
 
       if (failed.length > 0) {
         throw new Error(`Policy check suite failed: ${failed.length} case(s) failed.`);
@@ -130,6 +167,7 @@ export function registerPolicyCommands(program: Command): void {
     .option("-c, --config <path>", "Path to contextgate.yaml.", "contextgate.yaml")
     .option("--max-tools <count>", "Override max selected tools.")
     .option("--json", "Print the full selection result as JSON.")
+    .option("--report <path>", "Write the selection result to a JSON report file.")
     .option("--fail-on-blocked", "Exit non-zero if any tools are blocked by policy.")
     .option("--fail-on-hidden", "Exit non-zero if any tools are hidden by policy.")
     .option("--fail-on-empty", "Exit non-zero if no tools are selected.")
@@ -140,6 +178,7 @@ export function registerPolicyCommands(program: Command): void {
           config: string;
           maxTools?: string;
           json?: boolean;
+          report?: string;
           failOnBlocked?: boolean;
           failOnHidden?: boolean;
           failOnEmpty?: boolean;
@@ -154,6 +193,9 @@ export function registerPolicyCommands(program: Command): void {
         });
 
         process.stdout.write(options.json ? formatPolicyTestJson(result) : `${formatSelectionResult(result, { indexed })}\n`);
+        if (options.report) {
+          await writePolicyReport(options.report, result);
+        }
         assertPolicyTestThresholds(result, options);
       },
     );

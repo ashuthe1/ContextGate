@@ -72,6 +72,7 @@ The first runnable slice is implemented:
 - `contextgate policy bundle-export`, `bundle-import`, and `bundle-verify` support portable shared policy bundles for teams.
 - `contextgate policy test --json --fail-on-blocked --fail-on-hidden --fail-on-empty` supports CI-friendly policy regression checks.
 - `contextgate policy test-file <suite.json>` runs a checked-in regression suite, and `contextgate init --team-scaffold` creates a starter team policy layout plus CI workflow template.
+- Policy bundles support optional HMAC signing via `--signing-key-env`, and policy checks support `--report <path>` so CI can upload JSON artifacts for audit review.
 - `github.merge_pull_request` and other `ask` tools require explicit approval before execution.
 - Configured `stdio` MCP servers are supported for discovery and execution through real MCP framing.
 - Retrieval now uses a hybrid lexical plus lightweight semantic matcher, so prompts like "bug report" and "code review" map to Jira and GitHub PR workflows.
@@ -91,6 +92,12 @@ Export and verify a shared policy bundle:
 
     npm run cli -- policy bundle-export --config contextgate.yaml --name team-safe --output .contextgate/team-safe.bundle.json
     npm run cli -- policy bundle-verify .contextgate/team-safe.bundle.json
+
+Export and verify a signed bundle:
+
+    export CONTEXTGATE_BUNDLE_KEY=super-secret
+    npm run cli -- policy bundle-export --config contextgate.yaml --name team-safe --output .contextgate/team-safe.bundle.json --signing-key-env CONTEXTGATE_BUNDLE_KEY --signing-key-id ci-key-1
+    npm run cli -- policy bundle-verify .contextgate/team-safe.bundle.json --signing-key-env CONTEXTGATE_BUNDLE_KEY
 
 Install a shared policy bundle into another project:
 
@@ -114,6 +121,10 @@ This creates:
 Run the checked-in suite locally or in CI:
 
     npm run cli -- policy test-file policies/checks/default.json --config contextgate.yaml --json
+
+Write a report artifact for CI upload:
+
+    npm run cli -- policy test-file policies/checks/default.json --config contextgate.yaml --json --report .contextgate/policy-report.json
 
 Execute a selected tool:
 

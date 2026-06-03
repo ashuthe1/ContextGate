@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { describe, expect, it } from "vitest";
 import type { SelectToolsResult } from "../../../packages/core/src/index.js";
-import { assertPolicyTestThresholds, initProject, runPolicyCheckSuite } from "./workflows.js";
+import { assertPolicyTestThresholds, initProject, runPolicyCheckSuite, writePolicyReport } from "./workflows.js";
 
 describe("CLI workflows", () => {
   it("fails policy checks based on configured CI thresholds", () => {
@@ -87,8 +87,16 @@ describe("CLI workflows", () => {
       expect(result.created).toContain("policies/checks/default.json");
       expect(result.created).toContain(".github/workflows/contextgate-policy-check.yml");
       expect(await readFile(join(root, "policies/checks/default.json"), "utf8")).toContain('"version": 1');
+      expect(await readFile(join(root, ".github/workflows/contextgate-policy-check.yml"), "utf8")).toContain("upload-artifact");
     } finally {
       process.chdir(cwd);
     }
+  });
+
+  it("writes policy reports for CI artifacts", async () => {
+    const root = await mkdtemp(join(tmpdir(), "contextgate-report-"));
+    const reportPath = join(root, "policy-report.json");
+    await writePolicyReport(reportPath, { ok: true, failures: 0 });
+    expect(await readFile(reportPath, "utf8")).toContain('"ok": true');
   });
 });

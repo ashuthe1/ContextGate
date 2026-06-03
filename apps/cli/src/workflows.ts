@@ -15,6 +15,7 @@ import {
   importPolicyBundle,
   readPolicyBundle,
   verifyPolicyBundle,
+  verifyPolicyBundleSignature,
 } from "../../../packages/policy/src/index.js";
 import { selectTools as runSelection } from "../../../packages/gateway/src/index.js";
 export {
@@ -187,10 +188,18 @@ export async function runPolicyCheckSuite(input: {
   };
 }
 
+export async function writePolicyReport(path: string, payload: unknown): Promise<void> {
+  await mkdir(dirname(resolve(path)), { recursive: true });
+  await writeFile(resolve(path), `${JSON.stringify(payload, null, 2)}\n`);
+}
+
 export async function createPolicyBundle(input: {
   configPath?: string;
   bundleName: string;
   outputPath: string;
+  metadata?: Record<string, string>;
+  signingKey?: string;
+  signingKeyId?: string;
 }): Promise<PolicyBundle> {
   return exportPolicyBundle(input);
 }
@@ -208,11 +217,28 @@ export async function verifyBundleFile(bundlePath: string): Promise<{
   valid: boolean;
   expected: string;
   actual: string;
+  signature: ReturnType<typeof verifyPolicyBundleSignature>;
 }> {
   const bundle = await readPolicyBundle(bundlePath);
   return {
     bundle,
     ...verifyPolicyBundle(bundle),
+    signature: verifyPolicyBundleSignature(bundle),
+  };
+}
+
+export async function verifyBundleFileWithKey(bundlePath: string, signingKey?: string): Promise<{
+  bundle: PolicyBundle;
+  valid: boolean;
+  expected: string;
+  actual: string;
+  signature: ReturnType<typeof verifyPolicyBundleSignature>;
+}> {
+  const bundle = await readPolicyBundle(bundlePath);
+  return {
+    bundle,
+    ...verifyPolicyBundle(bundle),
+    signature: verifyPolicyBundleSignature(bundle, signingKey),
   };
 }
 
@@ -297,7 +323,12 @@ function defaultGitHubWorkflowText(): string {
     "          cache: npm",
     "      - run: npm ci",
     "      - run: npm run cli -- index --config contextgate.yaml",
-    "      - run: npm run cli -- policy test-file policies/checks/default.json --config contextgate.yaml --json",
+    "      - run: npm run cli -- policy test-file policies/checks/default.json --config contextgate.yaml --json --report .contextgate/policy-report.json",
+    "      - uses: actions/upload-artifact@v4",
+    "        if: always()",
+    "        with:",
+    "          name: contextgate-policy-report",
+    "          path: .contextgate/policy-report.json",
     "",
   ].join("\n");
 }

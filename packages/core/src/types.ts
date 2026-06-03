@@ -154,6 +154,11 @@ export interface PolicyBundle {
   policyText: string;
   policySha256: string;
   metadata?: JsonObject;
+  signature?: {
+    algorithm: "hmac-sha256";
+    keyId: string;
+    digest: string;
+  };
 }
 
 export interface PolicyCheckCase {
