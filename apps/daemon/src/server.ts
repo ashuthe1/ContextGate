@@ -10,6 +10,8 @@ import {
   selectTools,
 } from "../../../packages/gateway/src/index.js";
 import type { JsonObject } from "../../../packages/core/src/index.js";
+import { listPendingApprovals, listTaskSummaries, listTaskTimeline, loadCatalogSnapshot } from "./state-view.js";
+import { renderUiHtml, renderUiScript, renderUiStyles } from "./ui.js";
 
 export interface DaemonOptions {
   configPath?: string;
@@ -64,8 +66,47 @@ export async function handleRequest(
     return;
   }
 
+  if (method === "GET" && pathname === "/") {
+    response.writeHead(302, { location: "/ui" });
+    response.end();
+    return;
+  }
+
+  if (method === "GET" && pathname === "/ui") {
+    writeText(response, 200, renderUiHtml(), "text/html; charset=utf-8");
+    return;
+  }
+
+  if (method === "GET" && pathname === "/ui/app.js") {
+    writeText(response, 200, renderUiScript(), "text/javascript; charset=utf-8");
+    return;
+  }
+
+  if (method === "GET" && pathname === "/ui/styles.css") {
+    writeText(response, 200, renderUiStyles(), "text/css; charset=utf-8");
+    return;
+  }
+
   if (method === "GET" && pathname === "/v1/server-health") {
     writeJson(response, 200, await checkServerHealth(options.configPath));
+    return;
+  }
+
+  if (method === "GET" && pathname === "/v1/catalog") {
+    const project = await loadProject(options.configPath);
+    writeJson(response, 200, await loadCatalogSnapshot(project.stateDir));
+    return;
+  }
+
+  if (method === "GET" && pathname === "/v1/tasks") {
+    const project = await loadProject(options.configPath);
+    writeJson(response, 200, await listTaskSummaries(project.stateDir));
+    return;
+  }
+
+  if (method === "GET" && pathname === "/v1/approvals") {
+    const project = await loadProject(options.configPath);
+    writeJson(response, 200, await listPendingApprovals(project.auditPath));
     return;
   }
 
@@ -127,6 +168,13 @@ export async function handleRequest(
     return;
   }
 
+  const timelineMatch = pathname.match(/^\/v1\/tasks\/([^/]+)\/timeline$/);
+  if (method === "GET" && timelineMatch) {
+    const project = await loadProject(options.configPath);
+    writeJson(response, 200, await listTaskTimeline(project.auditPath, decodeURIComponent(timelineMatch[1])));
+    return;
+  }
+
   const expandMatch = pathname.match(/^\/v1\/tasks\/([^/]+)\/expand$/);
   if (method === "POST" && expandMatch) {
     const body = await readJson(request);
@@ -164,6 +212,11 @@ async function readJson(request: IncomingMessage): Promise<unknown> {
 function writeJson(response: ServerResponse, status: number, body: unknown): void {
   response.writeHead(status, { "content-type": "application/json; charset=utf-8" });
   response.end(`${JSON.stringify(body, null, 2)}\n`);
+}
+
+function writeText(response: ServerResponse, status: number, body: string, contentType: string): void {
+  response.writeHead(status, { "content-type": contentType });
+  response.end(body);
 }
 
 function isToolCallBody(value: unknown): value is {

@@ -30,6 +30,7 @@ The visible proof of success is a demo where a mock catalog has many tools, a pr
 - [x] (2026-06-03) Added server health checks across configured MCP integrations.
 - [x] (2026-06-03) Added task selection expansion for follow-up tool needs.
 - [x] (2026-06-03) Added catalog diff reporting for re-indexed integrations.
+- [x] (2026-06-03) Added a daemon-served local web UI for operators.
 
 ## Surprises & Discoveries
 
@@ -50,6 +51,9 @@ The visible proof of success is a demo where a mock catalog has many tools, a pr
 
 - Observation: Expansion can be implemented safely without re-running the whole task selection if the system ranks only previously rejected tools against the follow-up reason.
   Evidence: the new `expandTools` path adds `jira.add_comment` to a previously narrow Jira-only task while leaving the original selected tool intact and reissuing a fresh capability.
+
+- Observation: The current JSONL audit log is already rich enough to power a useful task timeline and approval queue without adding a database yet.
+  Evidence: the new `/ui` console derives pending approvals from `approval_requested` events and reconstructs task timelines from the existing audit entries in tests.
 
 ## Decision Log
 
@@ -97,6 +101,10 @@ The visible proof of success is a demo where a mock catalog has many tools, a pr
   Rationale: Once real stdio servers are involved, operators need immediate visibility into whether discovery works and what changed between indexing runs; these CLI and SDK surfaces are more urgent than a web UI.
   Date/Author: 2026-06-03 / Codex
 
+- Decision: Implement the first local web UI as daemon-served static HTML, CSS, and JavaScript instead of introducing React or a separate web build.
+  Rationale: The roadmap calls for better developer UX, but the repo still benefits from a zero-build, local-first console that reuses existing daemon APIs and keeps the operational surface small.
+  Date/Author: 2026-06-03 / Codex
+
 ## Outcomes & Retrospective
 
 Milestone 1 is complete. The repo now has a runnable CLI that can initialize config, index 30 mock MCP tools, select 8 task-relevant tools for a Jira-to-GitHub PR workflow, show blocked dangerous tools for destructive prompts, and write local audit/task state. Typecheck, unit tests, build, and compiled CLI smoke tests pass. The remaining major gap is execution: selected tools are not yet callable through a policy-enforcing gateway.
@@ -110,6 +118,8 @@ The SDK and retrieval follow-ups are also complete. `@contextgate/sdk` now wraps
 The first real SDK consumer and first real integration path are now in place. The sample agent runs through the public SDK against the daemon instead of calling gateway internals directly, and the repo includes a concrete stdio filesystem MCP example config that exercises a real external server shape through the same indexing and selection flow.
 
 The next Phase 3 slice is complete. The CLI and SDK can now check integration health, the daemon exposes server-health and task-expansion APIs, task selections can be expanded when an agent needs additional tools mid-run, and re-indexing reports catalog additions, changes, and removals so real integration drift is visible. Typecheck, build, and the expanded 18-test suite all pass.
+
+The first Phase 4 slice is complete. The daemon now serves a local operator console at `/ui` with server health, pending approvals, recent tasks, per-task explanation and timeline views, and a catalog browser. This makes the system inspectable without reading JSON files by hand. Typecheck, build, and the 20-test suite pass.
 
 ## Context and Orientation
 

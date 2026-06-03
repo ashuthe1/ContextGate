@@ -117,6 +117,25 @@ export interface ServerHealth {
   error?: string;
 }
 
+export interface TaskSummary {
+  taskId: string;
+  capabilityId?: string;
+  promptText?: string;
+  promptHash: string;
+  selectedCount: number;
+  hiddenCount: number;
+  blockedCount: number;
+  createdAt?: string;
+}
+
+export interface ApprovalSummary {
+  taskId: string;
+  toolId: string;
+  approvalId?: string;
+  timestamp: string;
+  reasons: string[];
+}
+
 export interface Task {
   id: string;
   userId?: string;
