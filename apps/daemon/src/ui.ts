@@ -33,6 +33,7 @@ export function renderUiHtml(): string {
             <h2>Pending Approvals</h2>
             <span class="meta">Approve or deny ask-mode requests</span>
           </div>
+          <input id="approvalFilter" class="filter-input" placeholder="Filter approvals by tool or task" />
           <div id="approvals"></div>
         </section>
       </section>
@@ -53,6 +54,7 @@ export function renderUiHtml(): string {
             <h2>Recent Tasks</h2>
             <span class="meta">Click a task to inspect selection and timeline</span>
           </div>
+          <input id="taskFilter" class="filter-input" placeholder="Filter tasks by prompt or task id" />
           <div id="tasks"></div>
         </section>
         <section class="panel detail">
@@ -67,6 +69,20 @@ export function renderUiHtml(): string {
         <div class="panel-header">
           <h2>Catalog Browser</h2>
           <span id="catalogCount" class="meta"></span>
+        </div>
+        <div class="filter-row">
+          <input id="catalogFilter" class="filter-input" placeholder="Search catalog by id, server, risk, or description" />
+          <select id="catalogRiskFilter" class="filter-select">
+            <option value="">All risks</option>
+            <option value="read">read</option>
+            <option value="write_safe">write_safe</option>
+            <option value="write_external">write_external</option>
+            <option value="destructive">destructive</option>
+            <option value="privileged_infra">privileged_infra</option>
+            <option value="monetary">monetary</option>
+            <option value="credential_access">credential_access</option>
+            <option value="unknown">unknown</option>
+          </select>
         </div>
         <div id="catalog"></div>
       </section>
@@ -111,6 +127,10 @@ button { border: 0; border-radius: 999px; background: var(--accent); color: whit
 .card .value { font: 700 2rem/1 ui-sans-serif, system-ui, sans-serif; margin-top: 8px; }
 .panel { border-radius: 22px; padding: 18px; min-height: 220px; }
 .editor-actions { display: flex; gap: 12px; align-items: center; margin-bottom: 12px; }
+.filter-row { display: flex; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
+.filter-input, .filter-select { width: 100%; border-radius: 14px; border: 1px solid var(--border); background: #fffdf9; padding: 11px 13px; color: var(--text); font: 14px/1.3 ui-sans-serif, system-ui, sans-serif; }
+.filter-row .filter-input { flex: 1 1 320px; }
+.filter-row .filter-select { flex: 0 0 180px; }
 .editor { width: 100%; min-height: 280px; border-radius: 18px; border: 1px solid var(--border); background: #fffdf9; padding: 14px; color: var(--text); font: 13px/1.5 ui-monospace, monospace; resize: vertical; }
 .panel.detail { min-height: 420px; }
 .panel-header { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; margin-bottom: 14px; }
@@ -130,6 +150,7 @@ button { border: 0; border-radius: 999px; background: var(--accent); color: whit
 .detail-grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); }
 .list { display: grid; gap: 10px; }
 .list-item { padding: 10px 12px; border-radius: 14px; background: white; border: 1px solid var(--border); }
+.subtle { font: 600 12px/1.3 ui-monospace, monospace; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
 .mono { font-family: ui-monospace, SFMono-Regular, monospace; }
 .empty { color: var(--muted); display: grid; place-items: center; min-height: 180px; }
 @media (max-width: 720px) {
@@ -140,10 +161,20 @@ button { border: 0; border-radius: 999px; background: var(--accent); color: whit
 }
 
 export function renderUiScript(): string {
-  return `const state = { tasks: [], selectedTaskId: null, policyEditable: false };
+  return `const state = {
+  tasks: [],
+  selectedTaskId: null,
+  policyEditable: false,
+  catalog: null,
+  approvals: [],
+};
 
 document.getElementById("refreshButton").addEventListener("click", () => loadDashboard(true));
 document.getElementById("savePolicyButton").addEventListener("click", () => savePolicy());
+document.getElementById("taskFilter").addEventListener("input", () => renderTasks(state.tasks));
+document.getElementById("approvalFilter").addEventListener("input", () => renderApprovals(state.approvals));
+document.getElementById("catalogFilter").addEventListener("input", () => renderCatalog(state.catalog));
+document.getElementById("catalogRiskFilter").addEventListener("change", () => renderCatalog(state.catalog));
 loadDashboard(false).catch(renderFatal);
 
 async function loadDashboard(preserveSelection) {
@@ -156,6 +187,8 @@ async function loadDashboard(preserveSelection) {
   ]);
 
   state.tasks = tasks;
+  state.approvals = approvals;
+  state.catalog = catalog;
   state.policyEditable = policy.editable === true;
   if (!preserveSelection || !state.selectedTaskId) {
     state.selectedTaskId = tasks[0]?.taskId ?? null;
@@ -210,9 +243,15 @@ function renderHealth(health) {
 }
 
 function renderApprovals(approvals) {
+  const query = document.getElementById('approvalFilter').value.trim().toLowerCase();
+  const filtered = approvals.filter((item) => {
+    const haystack = [item.toolId, item.taskId, item.reasons.join(' ')].join(' ').toLowerCase();
+    return query.length === 0 || haystack.includes(query);
+  });
+
   document.getElementById("approvals").innerHTML = wrapRows(
-    approvals.map((item) => '<div class="row"><div><strong>' + escapeHtml(item.toolId) + '</strong></div><div class="kv"><span class="mono">' + escapeHtml(item.taskId) + '</span><span>' + escapeHtml(item.timestamp) + '</span></div><div class="muted">' + escapeHtml(item.reasons.join(', ') || 'approval required') + '</div><div class="actions"><button data-approve="' + escapeHtml(item.approvalId || '') + '">Approve</button><button class="secondary" data-deny="' + escapeHtml(item.approvalId || '') + '">Deny</button></div></div>'),
-    'No pending approvals.'
+    filtered.map((item) => '<div class="row"><div><strong>' + escapeHtml(item.toolId) + '</strong></div><div class="kv"><span class="mono">' + escapeHtml(item.taskId) + '</span><span>' + escapeHtml(item.timestamp) + '</span><span>' + escapeHtml(formatArguments(item.arguments)) + '</span></div><div class="muted">' + escapeHtml(item.reasons.join(', ') || 'approval required') + '</div><div class="actions"><button data-approve="' + escapeHtml(item.approvalId || '') + '">Approve</button><button class="secondary" data-deny="' + escapeHtml(item.approvalId || '') + '">Deny</button></div></div>'),
+    filtered.length === approvals.length ? 'No pending approvals.' : 'No approvals match the current filter.'
   );
   for (const element of document.querySelectorAll('[data-approve]')) {
     element.addEventListener('click', () => resolveApproval(element.getAttribute('data-approve'), true));
@@ -232,9 +271,15 @@ function renderPolicy(policy) {
 }
 
 function renderTasks(tasks) {
+  const query = document.getElementById('taskFilter').value.trim().toLowerCase();
+  const filtered = tasks.filter((task) => {
+    const haystack = [task.taskId, task.promptText || '', task.promptHash].join(' ').toLowerCase();
+    return query.length === 0 || haystack.includes(query);
+  });
+
   document.getElementById("tasks").innerHTML = wrapRows(
-    tasks.map((task) => '<div class="row task' + (task.taskId === state.selectedTaskId ? ' active' : '') + '" data-task-id="' + escapeHtml(task.taskId) + '"><div><strong>' + escapeHtml(task.promptText || task.taskId) + '</strong></div><div class="kv"><span class="mono">' + escapeHtml(task.taskId) + '</span><span>selected=' + task.selectedCount + '</span><span>hidden=' + task.hiddenCount + '</span><span>blocked=' + task.blockedCount + '</span></div></div>'),
-    'No saved tasks.'
+    filtered.map((task) => '<div class="row task' + (task.taskId === state.selectedTaskId ? ' active' : '') + '" data-task-id="' + escapeHtml(task.taskId) + '"><div><strong>' + escapeHtml(task.promptText || task.taskId) + '</strong></div><div class="kv"><span class="mono">' + escapeHtml(task.taskId) + '</span><span>selected=' + task.selectedCount + '</span><span>hidden=' + task.hiddenCount + '</span><span>blocked=' + task.blockedCount + '</span></div></div>'),
+    filtered.length === tasks.length ? 'No saved tasks.' : 'No tasks match the current filter.'
   );
   for (const element of document.querySelectorAll('[data-task-id]')) {
     element.addEventListener('click', () => loadTaskDetail(element.getAttribute('data-task-id')));
@@ -242,27 +287,45 @@ function renderTasks(tasks) {
 }
 
 function renderCatalog(catalog) {
-  document.getElementById("catalogCount").textContent = (catalog?.tools?.length ?? 0) + ' tools';
+  const textQuery = document.getElementById("catalogFilter").value.trim().toLowerCase();
+  const riskQuery = document.getElementById("catalogRiskFilter").value;
   const tools = (catalog?.tools ?? []).slice().sort((a, b) => a.id.localeCompare(b.id));
+  const filtered = tools.filter((tool) => {
+    const matchesRisk = riskQuery.length === 0 || tool.riskClass === riskQuery;
+    const haystack = [tool.id, tool.serverId, tool.riskClass, tool.trustLevel, tool.description || '', tool.title || ''].join(' ').toLowerCase();
+    const matchesText = textQuery.length === 0 || haystack.includes(textQuery);
+    return matchesRisk && matchesText;
+  });
+
+  document.getElementById("catalogCount").textContent = filtered.length + ' / ' + tools.length + ' tools';
   document.getElementById("catalog").innerHTML = wrapRows(
-    tools.map((tool) => '<div class="row"><div><strong>' + escapeHtml(tool.id) + '</strong></div><div class="kv"><span>' + escapeHtml(tool.riskClass) + '</span><span>' + escapeHtml(tool.trustLevel) + '</span><span>' + escapeHtml(tool.serverId) + '</span></div><div class="muted">' + escapeHtml(tool.description || tool.title || 'No description') + '</div></div>'),
-    'Catalog has not been indexed yet.'
+    filtered.map((tool) => '<div class="row"><div><strong>' + escapeHtml(tool.id) + '</strong></div><div class="kv"><span>' + escapeHtml(tool.riskClass) + '</span><span>' + escapeHtml(tool.trustLevel) + '</span><span>' + escapeHtml(tool.serverId) + '</span></div><div class="muted">' + escapeHtml(tool.description || tool.title || 'No description') + '</div></div>'),
+    tools.length === 0 ? 'Catalog has not been indexed yet.' : 'No catalog tools match the current filters.'
   );
 }
 
 function taskDetailHtml(task, timeline) {
-  const selected = task.selected.map((item) => '<div class="list-item"><strong>' + escapeHtml(item.tool.id) + '</strong><div class="muted">' + escapeHtml(item.reasons.join(', ')) + '</div></div>').join('');
-  const rejected = task.rejected.slice(0, 12).map((item) => '<div class="list-item"><strong>' + escapeHtml(item.tool.id) + '</strong><div class="muted">' + escapeHtml(item.decision + ': ' + item.reasons.join(', ')) + '</div></div>').join('');
+  const selected = task.selected.map((item) => toolExplanationHtml(item.tool.id, item.score, item.mode, item.riskClass, item.reasons, item.policyRuleId)).join('');
+  const rejected = task.rejected.slice(0, 16).map((item) => toolExplanationHtml(item.tool.id, item.score, item.decision, item.tool.riskClass, item.reasons, item.policyRuleId)).join('');
+  const candidateTop = (task.candidates || []).slice(0, 10).map((item) => '<div class="list-item"><strong>' + escapeHtml(item.tool.id) + '</strong><div class="kv"><span>score=' + escapeHtml(item.score?.toFixed ? item.score.toFixed(2) : String(item.score ?? '')) + '</span></div><div class="muted">' + escapeHtml((item.reasons || []).join(', ')) + '</div></div>').join('');
   const events = timeline.map((event) => '<div class="list-item"><strong>' + escapeHtml(event.type) + '</strong><div class="kv"><span>' + escapeHtml(event.timestamp) + '</span><span>' + escapeHtml(event.toolId || '') + '</span><span>' + escapeHtml(event.decision || '') + '</span></div><div class="muted">' + escapeHtml((event.reasons || []).join(', ')) + '</div></div>').join('');
   return '<div class="detail-grid">' +
     '<section><h3>Prompt</h3><div class="list-item">' + escapeHtml(task.promptText || task.promptHash) + '</div></section>' +
-    '<section><h3>Summary</h3><div class="list-item">selected=' + task.selected.length + ', hidden=' + task.hiddenCount + ', blocked=' + task.blockedCount + ', not_relevant=' + task.notRelevantCount + '</div></section>' +
+    '<section><h3>Summary</h3><div class="list-item">catalog=' + task.totalTools + ', candidates=' + task.candidates.length + ', selected=' + task.selected.length + ', hidden=' + task.hiddenCount + ', blocked=' + task.blockedCount + ', not_relevant=' + task.notRelevantCount + ', tokens_saved=' + task.estimatedSchemaTokensSaved + '</div></section>' +
     '</div>' +
     '<div class="detail-grid">' +
     '<section><h3>Selected Tools</h3><div class="list">' + (selected || '<div class="empty">No selected tools.</div>') + '</div></section>' +
     '<section><h3>Rejected Highlights</h3><div class="list">' + (rejected || '<div class="empty">No rejected tools.</div>') + '</div></section>' +
     '</div>' +
-    '<section><h3>Timeline</h3><div class="list">' + (events || '<div class="empty">No audit events for this task.</div>') + '</div></section>';
+    '<div class="detail-grid">' +
+    '<section><h3>Top Candidates</h3><div class="list">' + (candidateTop || '<div class="empty">No candidates recorded.</div>') + '</div></section>' +
+    '<section><h3>Timeline</h3><div class="list">' + (events || '<div class="empty">No audit events for this task.</div>') + '</div></section>' +
+    '</div>';
+}
+
+function toolExplanationHtml(toolId, score, decision, riskClass, reasons, policyRuleId) {
+  const scoreText = typeof score === 'number' ? score.toFixed(2) : 'n/a';
+  return '<div class="list-item"><div class="subtle">' + escapeHtml(policyRuleId || 'policy: inferred') + '</div><strong>' + escapeHtml(toolId) + '</strong><div class="kv"><span>decision=' + escapeHtml(decision) + '</span><span>risk=' + escapeHtml(riskClass) + '</span><span>score=' + escapeHtml(scoreText) + '</span></div><div class="muted">' + escapeHtml((reasons || []).join(', ')) + '</div></div>';
 }
 
 function wrapRows(rows, emptyText) {
@@ -321,6 +384,14 @@ async function requestJson(url, init) {
     throw new Error(data?.error || ('Request failed for ' + url));
   }
   return data;
+}
+
+function formatArguments(value) {
+  if (!value || typeof value !== 'object') {
+    return 'args: none';
+  }
+  const entries = Object.entries(value).slice(0, 2).map(([key, nested]) => key + '=' + String(nested));
+  return entries.length > 0 ? 'args: ' + entries.join(', ') : 'args: empty';
 }
 
 function renderFatal(error) {

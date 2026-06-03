@@ -32,6 +32,7 @@ The visible proof of success is a demo where a mock catalog has many tools, a pr
 - [x] (2026-06-03) Added catalog diff reporting for re-indexed integrations.
 - [x] (2026-06-03) Added a daemon-served local web UI for operators.
 - [x] (2026-06-03) Added UI-backed policy editing and approval action workflows.
+- [x] (2026-06-03) Added console filtering and richer task explanation views.
 
 ## Surprises & Discoveries
 
@@ -58,6 +59,9 @@ The visible proof of success is a demo where a mock catalog has many tools, a pr
 
 - Observation: Approval replay does not need a separate queue store if the audit log keeps `approvalId` and original tool arguments.
   Evidence: the daemon now resolves `/v1/approvals/:approvalId/approve` by reading the saved approval request from the audit log, loading the task capability, and replaying `callTool` with explicit approval.
+
+- Observation: The existing task selection JSON already contains enough data to explain selection quality once policy rule ids are preserved in selected and rejected items.
+  Evidence: the task detail view now shows candidate scores, selected/rejected reasons, and the originating policy rule id without adding a new explanation store.
 
 ## Decision Log
 
@@ -113,6 +117,10 @@ The visible proof of success is a demo where a mock catalog has many tools, a pr
   Rationale: Writing back an inferred default policy without an explicit file path would blur config ownership and require mutating `contextgate.yaml`. Read-only fallback keeps the behavior predictable while still making the effective policy visible.
   Date/Author: 2026-06-03 / Codex
 
+- Decision: Keep task, approval, and catalog filtering client-side inside the built-in UI.
+  Rationale: The current data sizes are small enough that local filtering keeps the daemon API simple while making the console much more usable as saved tasks and indexed tools grow.
+  Date/Author: 2026-06-03 / Codex
+
 ## Outcomes & Retrospective
 
 Milestone 1 is complete. The repo now has a runnable CLI that can initialize config, index 30 mock MCP tools, select 8 task-relevant tools for a Jira-to-GitHub PR workflow, show blocked dangerous tools for destructive prompts, and write local audit/task state. Typecheck, unit tests, build, and compiled CLI smoke tests pass. The remaining major gap is execution: selected tools are not yet callable through a policy-enforcing gateway.
@@ -130,6 +138,8 @@ The next Phase 3 slice is complete. The CLI and SDK can now check integration he
 The first Phase 4 slice is complete. The daemon now serves a local operator console at `/ui` with server health, pending approvals, recent tasks, per-task explanation and timeline views, and a catalog browser. This makes the system inspectable without reading JSON files by hand. Typecheck, build, and the 20-test suite pass.
 
 The next Phase 4 slice is also complete. The local console can now edit the configured policy YAML file and approve or deny pending ask-mode tool calls directly from the browser. The daemon exposes policy load/save routes plus approval resolution routes, and the test suite now covers these operator actions. Typecheck, build, and the 22-test suite pass.
+
+The next Phase 4 polish slice is complete. The console now supports filtering for tasks, approvals, and catalog tools, and task detail pages provide clearer selection explanations with policy rule ids, candidate rankings, selected/rejected reasons, and timeline context. Typecheck, build, and the 22-test suite still pass.
 
 ## Context and Orientation
 

@@ -59,6 +59,7 @@ export class DefaultSelectionEngine implements SelectionEngine {
           riskClass: exposure.riskClass,
           requiresApproval: exposure.decision === "selected_requires_approval",
           reasons: exposure.reasons,
+          policyRuleId: exposure.policyRuleId,
         });
         continue;
       }
@@ -74,6 +75,7 @@ export class DefaultSelectionEngine implements SelectionEngine {
           selected.length >= maxTools && exposure.decision.startsWith("selected")
             ? [...exposure.reasons, `max tool limit ${maxTools} reached`]
             : exposure.reasons,
+        policyRuleId: exposure.policyRuleId,
       });
     }
 

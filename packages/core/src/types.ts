@@ -70,6 +70,7 @@ export interface SelectedTool {
   riskClass: RiskClass;
   requiresApproval: boolean;
   reasons: string[];
+  policyRuleId?: string;
 }
 
 export interface RejectedTool {
@@ -77,6 +78,7 @@ export interface RejectedTool {
   score?: number;
   decision: Exclude<ExposureDecisionKind, "selected" | "selected_requires_approval">;
   reasons: string[];
+  policyRuleId?: string;
 }
 
 export interface SelectToolsInput {

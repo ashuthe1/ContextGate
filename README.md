@@ -65,7 +65,7 @@ The first runnable slice is implemented:
 - `contextgate policy test "<prompt>"` dry-runs selection and shows selected, hidden, and blocked tools.
 - `contextgate call <task> <capability> <tool> <json>` executes a selected tool through the gateway.
 - `contextgate serve` starts the local HTTP daemon.
-- The daemon now serves a local operator console at `/ui` with integration health, task history, approval pressure, catalog browsing, per-task timelines, a policy editor, and approval actions.
+- The daemon now serves a local operator console at `/ui` with integration health, task history, approval pressure, catalog browsing, per-task timelines, a policy editor, approval actions, and task/catalog filtering.
 - `contextgate health` checks configured MCP servers and reports whether discovery succeeds.
 - `contextgate expand <task-id> "<reason>"` adds more tools to an existing task when the first manifest was too narrow.
 - `@contextgate/sdk` provides a TypeScript client for `selectTools`, `callTool`, task explanation, and health checks.
@@ -148,6 +148,15 @@ The local console is backed by daemon routes for:
     POST /v1/approvals/:approvalId/deny
 
 If `contextgate.yaml` points at a `policy.file`, the UI policy editor can save changes directly back to that YAML file. If no `policy.file` is configured, the UI shows the generated effective default policy in read-only mode.
+
+The task detail view now shows:
+
+    selected tools with policy rule ids and reasons
+    rejected tools with decisions and reasons
+    top candidate tools
+    timeline events for the task
+
+The task, approval, and catalog panes all support local filtering so the console remains usable once the project has many saved tasks and indexed tools.
 
 Try a real stdio MCP integration with the filesystem server:
 
